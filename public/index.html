@@ -1054,7 +1054,9 @@ const Brain3D = (() => {
 
   function buildStars() {
     const out = [];
-    for (let i = 0; i < 140; i++) out.push({ x: rnd(), y: rnd(), r: rnd() * 1.1 + 0.3, tw: rnd() });
+    // 깜빡이면 시선을 뺏는다. 밝기를 별마다 고정해 가만히 있게 둔다
+    for (let i = 0; i < 90; i++)
+      out.push({ x: rnd(), y: rnd(), r: rnd() * 1.0 + 0.3, a: 0.18 + rnd() * 0.30 });
     return out;
   }
 
@@ -1075,10 +1077,9 @@ const Brain3D = (() => {
 
     ctx.globalCompositeOperation = 'lighter';
 
-    // 별빛
+    // 별빛 (깜빡이지 않는다)
     for (const st of stars) {
-      const a = 0.35 + 0.45 * Math.sin(t / 900 + st.tw * 9);
-      ctx.globalAlpha = a;
+      ctx.globalAlpha = st.a;
       ctx.fillStyle = '#cfe0ff';
       ctx.beginPath();
       ctx.arc(st.x * w, st.y * h, st.r * dpr, 0, 6.2832);
@@ -1086,7 +1087,8 @@ const Brain3D = (() => {
     }
 
     // 뇌
-    const cx = w / 2, cy = h / 2, scale = Math.min(w, h) * 0.36;
+    // 가로를 기준으로 키운다. 아래쪽 안내문과 겹치지 않게 중심을 살짝 올린다
+    const cx = w / 2, cy = h * 0.47, scale = w * 0.40;
     const cy1 = Math.cos(v.yaw), sy1 = Math.sin(v.yaw);
     const cp = Math.cos(v.pitch), sp = Math.sin(v.pitch);
 
@@ -1136,7 +1138,7 @@ const Brain3D = (() => {
   function resize(v) {
     const rect = v.canvas.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const cssH = Math.round(rect.width * 0.78);
+    const cssH = Math.round(rect.width * 0.84);
     v.canvas.style.height = cssH + 'px';
     v.canvas.width = Math.round(rect.width * dpr);
     v.canvas.height = Math.round(cssH * dpr);
