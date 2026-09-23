@@ -66,6 +66,30 @@ body {
 }
 .section-title { font-size: 1.25rem; margin-bottom: 14px; }
 
+/* ---------- 출석 스탬프 ---------- */
+.attend-card {
+  background: var(--card); border: 2px solid var(--line); border-radius: 16px;
+  padding: 16px; margin-bottom: 22px; box-shadow: 0 2px 6px rgba(30,41,59,.06);
+}
+.attend-top {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
+}
+.attend-title { font-size: 1.15rem; font-weight: bold; }
+.attend-streak { font-size: .95rem; color: var(--text-sub); white-space: nowrap; }
+.attend-streak b { color: #b45309; font-size: 1.25rem; }
+.attend-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.attend-dow { text-align: center; font-size: .75rem; color: var(--text-sub); }
+.attend-day {
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  border-radius: 10px; background: var(--bg); border: 2px solid var(--line);
+  font-size: 1rem; color: var(--text-sub);
+}
+.attend-day.done { background: #fef3c7; border-color: #f59e0b; }
+.attend-day.today { border-color: var(--blue); border-width: 3px; font-weight: bold; }
+.attend-day.future { opacity: .35; }
+.attend-msg { margin-top: 12px; font-size: .95rem; color: var(--text-sub); text-align: center; }
+
 .mission-list { display: flex; flex-direction: column; gap: 14px; }
 .mission-card {
   background: var(--card); border: 2px solid var(--line); border-radius: 16px;
@@ -241,6 +265,7 @@ body {
 .result-score { font-size: 1.3rem; margin-bottom: 16px; }
 .result-score strong { color: var(--blue); font-size: 1.8rem; }
 .result-max { font-size: 1rem; color: var(--text-sub); }
+.feedback-notice { color: var(--blue); font-weight: bold; }
 .result-detail {
   text-align: left; font-size: 1.05rem; line-height: 1.7; color: var(--text-sub);
   background: var(--bg); border-radius: 12px; padding: 14px; margin-bottom: 8px;
@@ -360,6 +385,8 @@ body {
     <div class="points-badge">🏅 <span id="total-points">0</span> P</div>
   </header>
 
+  <div id="home-attend" class="attend-card"></div>
+
   <h2 class="section-title">나의 뇌 대시보드</h2>
 
   <div id="home-brain" class="region-brain"></div>
@@ -408,6 +435,11 @@ body {
     <div class="game-stat"><span id="speed-no">0</span>/10</div>
   </header>
   <p class="game-guide" id="speed-guide">그림을 잘 기억하세요!</p>
+  <div id="speed-timer-row" class="timer-row hidden">
+    <span class="timer-label">⏱ 남은 시간</span>
+    <div class="timer-track"><div id="speed-timer" class="timer-bar"></div></div>
+    <span id="speed-timer-num" class="timer-num">4초</span>
+  </div>
   <div id="speed-card" class="speed-card">🍎</div>
   <div class="speed-buttons">
     <button id="speed-same" class="btn-big btn-same" onclick="Speed.answer(true)">같다 ⭕</button>
@@ -424,7 +456,8 @@ body {
     <div class="game-title">색깔 글자</div>
     <div class="game-stat"><span id="stroop-no">1</span>/10</div>
   </header>
-  <p class="game-guide">글자의 <b>뜻</b>과 <b>칠해진 색깔</b>이 같은가요?</p>
+  <div id="stroop-level-banner" class="level-banner">1단계</div>
+  <p class="game-guide" id="stroop-guide">글자의 <b>뜻</b>과 <b>칠해진 색깔</b>이 같은가요?</p>
   <div id="stroop-word" class="stroop-word">빨강</div>
   <div class="speed-buttons">
     <button class="btn-big btn-same" onclick="Stroop.answer(true)">같다 ⭕</button>
@@ -563,6 +596,71 @@ function renderBests() {
   });
 }
 
+// 출석 스탬프: 게임을 하나라도 끝낸 날에 도장이 찍힌다
+const Attend = (() => {
+  const KEY = 'vgb_days';
+  const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  function load() {
+    try {
+      const v = JSON.parse(localStorage.getItem(KEY));
+      return Array.isArray(v) ? v.filter(x => typeof x === 'string') : [];
+    } catch { return []; }
+  }
+  function mark() {
+    const today = ymd(new Date()), days = load();
+    if (!days.includes(today)) {
+      days.push(today);
+      try { localStorage.setItem(KEY, JSON.stringify(days)); } catch {}
+    }
+  }
+  // 연속 출석일. 오늘 아직 훈련 전이면 어제까지의 기록을 보여준다(연속이 끊긴 게 아니므로)
+  function streak(set) {
+    const d = new Date();
+    if (!set.has(ymd(d))) d.setDate(d.getDate() - 1);
+    let n = 0;
+    while (set.has(ymd(d))) { n++; d.setDate(d.getDate() - 1); }
+    return n;
+  }
+
+  function render() {
+    const box = document.getElementById('home-attend');
+    if (!box) return;
+    const set = new Set(load());
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayKey = ymd(today);
+
+    // 지난주 일요일부터 2주치 - 요일이 세로로 맞아떨어지게
+    const start = new Date(today);
+    start.setDate(start.getDate() - today.getDay() - 7);
+
+    let cells = '';
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(start); d.setDate(start.getDate() + i);
+      const key = ymd(d), done = set.has(key);
+      const cls = ['attend-day'];
+      if (done) cls.push('done');
+      if (key === todayKey) cls.push('today');
+      if (d > today) cls.push('future');
+      cells += `<div class="${cls.join(' ')}">${done ? '🏅' : d.getDate()}</div>`;
+    }
+
+    box.innerHTML = `
+      <div class="attend-top">
+        <div class="attend-title">📅 출석 스탬프</div>
+        <div class="attend-streak">연속 <b>${streak(set)}</b>일 · 누적 <b>${set.size}</b>일</div>
+      </div>
+      <div class="attend-grid">${DOW.map(w => `<div class="attend-dow">${w}</div>`).join('')}</div>
+      <div class="attend-grid" style="margin-top:6px">${cells}</div>
+      <div class="attend-msg">${set.has(todayKey)
+        ? '오늘 훈련을 마치셨어요! 🎉'
+        : '게임을 <b>하나만</b> 끝내도 오늘 도장이 찍혀요'}</div>`;
+  }
+
+  return { mark, render };
+})();
+
 // 게임 세션 토큰: 게임을 벗어나면 번호가 올라가고, 이전 세션에 예약된
 // 지연 실행(피드백 대기 등)은 무시된다. (나가기를 눌러도 화면이 되돌아오는 문제 방지)
 let sessionId = 0;
@@ -583,6 +681,7 @@ function goHome() {
   showScreen('screen-home');
   renderPoints();
   renderBests();
+  Attend.render();
   if (typeof Region !== 'undefined') Region.renderHome(); // 대시보드 기록 갱신
 }
 
@@ -605,11 +704,13 @@ function showResult({ score, max, detailHtml, retryFn, gameKey }) {
   document.getElementById('result-detail').innerHTML = detailHtml || '';
   document.getElementById('result-retry').onclick = retryFn;
   addPoints(score);
+  Attend.mark();
   showScreen('screen-result');
 }
 
 renderPoints();
 renderBests();
+Attend.render();
 
 </script>
 <script>
@@ -962,8 +1063,10 @@ const Shape = (() => {
 const Speed = (() => {
   const TOTAL = 10;
   const SYMBOLS = ['🍎', '🍌', '🍇', '🍊'];
+  const LIMIT = 4000; // 카드 한 장당 제한시간 (원형은 1초지만 시니어 대상이라 넉넉하게)
 
   let no = 0, score = 0, streak = 0, prev = null, current = null, lock = false, sid = 0;
+  let limitTimer = null, tickTimer = null;
   const rand = arr => arr[Math.floor(Math.random() * arr.length)];
 
   function start() {
@@ -976,6 +1079,8 @@ const Speed = (() => {
     document.getElementById('speed-guide').textContent = '이 그림을 잘 기억하세요!';
     document.getElementById('speed-feedback').textContent = '';
     setButtons(false);
+    stopTimer();
+    document.getElementById('speed-timer-row').classList.add('hidden');
     document.getElementById('speed-begin').classList.remove('hidden');
     showScreen('screen-speed');
   }
@@ -987,8 +1092,53 @@ const Speed = (() => {
 
   function begin() {
     document.getElementById('speed-begin').classList.add('hidden');
+    document.getElementById('speed-timer-row').classList.remove('hidden');
     document.getElementById('speed-guide').textContent = '방금 전 그림과 같은가요?';
     nextCard();
+  }
+
+  // 제한시간 바: 청기백기와 같은 방식
+  function startTimer() {
+    const bar = document.getElementById('speed-timer');
+    const num = document.getElementById('speed-timer-num');
+    bar.classList.remove('running', 'low');
+    num.classList.remove('low');
+    bar.style.transitionDuration = '0ms';
+    bar.style.width = '100%';
+    num.textContent = Math.round(LIMIT / 1000) + '초';
+    // 100% -> 0%를 한 프레임에 같이 넣으면 전환이 일어나지 않는다.
+    // 강제로 한 번 계산시켜야 막대가 실제로 줄어든다.
+    void bar.offsetWidth;
+    bar.classList.add('running');
+    bar.style.transitionDuration = LIMIT + 'ms';
+    bar.style.width = '0%';
+    const endAt = Date.now() + LIMIT;
+    clearInterval(tickTimer);
+    tickTimer = setInterval(() => {
+      const left = Math.max(0, endAt - Date.now());
+      num.textContent = Math.ceil(left / 1000) + '초';
+      if (left <= 1500) { num.classList.add('low'); bar.classList.add('low'); }
+    }, 100);
+    limitTimer = gameTimeout(sid, timeUp, LIMIT);
+  }
+
+  function stopTimer() {
+    clearTimeout(limitTimer); clearInterval(tickTimer);
+    const bar = document.getElementById('speed-timer');
+    bar.classList.remove('running');
+    bar.style.transitionDuration = '0ms';
+    bar.style.width = '100%';
+  }
+
+  function timeUp() {
+    if (lock) return;
+    lock = true;
+    setButtons(false);
+    stopTimer();
+    streak = 0;
+    document.getElementById('speed-feedback').innerHTML =
+      `<span class="feedback-bad">⏰ 시간이 지났어요! (직전 그림: ${prev})</span>`;
+    gameTimeout(sid, nextCard, 1500);
   }
 
   function nextCard() {
@@ -1002,12 +1152,14 @@ const Speed = (() => {
     document.getElementById('speed-card').textContent = current;
     document.getElementById('speed-feedback').textContent = '';
     setButtons(true);
+    startTimer();
   }
 
   function answer(saidSame) {
     if (lock) return;
     lock = true;
     setButtons(false);
+    stopTimer();
     const ok = saidSame === (current === prev);
     const fb = document.getElementById('speed-feedback');
     if (ok) {
@@ -1020,12 +1172,15 @@ const Speed = (() => {
     gameTimeout(sid, nextCard, ok ? 700 : 1500);
   }
 
-  function quit() { goHome(); }
+  function quit() { stopTimer(); goHome(); }
 
   function finish() {
+    stopTimer();
+    document.getElementById('speed-timer-row').classList.add('hidden');
     showResult({
       score, max: TOTAL, gameKey: 'speed',
-      detailHtml: `방금 본 것을 붙잡아두는 <b>순간 기억과 판단 속도(측두엽)</b> 훈련이었어요.`,
+      detailHtml: `방금 본 것을 붙잡아두는 <b>순간 기억과 판단 속도(측두엽)</b> 훈련이었어요.<br>` +
+        `한 장당 ${LIMIT / 1000}초 안에 판단하셔야 해요!`,
       retryFn: start,
     });
   }
@@ -1045,11 +1200,15 @@ const Stroop = (() => {
     { name: '초록', hex: '#16a34a' },
   ];
 
+  const LEVEL2_FROM = 6; // 6번 문제부터 '직전 글자'와 비교하는 2단계
+
   let no = 0, score = 0, streak = 0, isMatch = false, lock = false, sid = 0;
+  let prevWord = null, refWord = null; // refWord = 이번 문제에서 비교 기준이 되는 글자
   const rand = arr => arr[Math.floor(Math.random() * arr.length)];
 
   function start() {
     no = 0; score = 0; streak = 0;
+    prevWord = null;
     sid = newSession();
     showScreen('screen-stroop');
     next();
@@ -1062,14 +1221,29 @@ const Stroop = (() => {
     document.getElementById('stroop-no').textContent = no;
     document.getElementById('stroop-feedback').textContent = '';
 
+    const level = no >= LEVEL2_FROM ? 2 : 1;
     const word = rand(COLORS);
-    // 50% 확률로 뜻과 색 일치
-    isMatch = Math.random() < 0.5;
-    const ink = isMatch ? word : rand(COLORS.filter(c => c.name !== word.name));
+
+    // 1단계: 이 글자의 뜻 vs 이 글자의 색 / 2단계: 직전 글자의 뜻 vs 이 글자의 색
+    refWord = level === 1 ? word : (prevWord || rand(COLORS));
+    isMatch = Math.random() < 0.5; // 50% 확률로 일치
+    const ink = isMatch ? refWord : rand(COLORS.filter(c => c.name !== refWord.name));
+
+    document.getElementById('stroop-level-banner').textContent = `${level}단계`;
+    document.getElementById('stroop-guide').innerHTML = level === 1
+      ? '글자의 <b>뜻</b>과 <b>칠해진 색깔</b>이 같은가요?'
+      : '<b>직전 글자의 뜻</b>과 <b>지금 칠해진 색깔</b>이 같은가요?';
+    // 규칙이 바뀌는 순간을 놓치지 않도록 한 번 알려준다
+    if (no === LEVEL2_FROM) {
+      document.getElementById('stroop-feedback').innerHTML =
+        '<span class="feedback-notice">⬆ 규칙이 바뀌었어요! 이제 <b>직전 글자</b>와 비교하세요</span>';
+    }
 
     const el = document.getElementById('stroop-word');
     el.textContent = word.name;
     el.style.color = ink.hex;
+
+    prevWord = word;
   }
 
   function answer(saidMatch) {
@@ -1082,7 +1256,8 @@ const Stroop = (() => {
       fb.innerHTML = `<span class="feedback-good">⭕ 정답!${streakText(streak)}</span>`;
     } else {
       streak = 0;
-      fb.innerHTML = `<span class="feedback-bad">❌ 아쉬워요! ${isMatch ? '뜻과 색이 같았어요' : '뜻과 색이 달랐어요'}</span>`;
+      const basis = no >= LEVEL2_FROM ? `직전 글자 '${refWord.name}'` : '뜻';
+      fb.innerHTML = `<span class="feedback-bad">❌ 아쉬워요! ${basis}과 색이 ${isMatch ? '같았어요' : '달랐어요'}</span>`;
     }
     gameTimeout(sid, next, ok ? 700 : 1500);
   }
@@ -1091,7 +1266,8 @@ const Stroop = (() => {
     showResult({
       score, max: TOTAL, gameKey: 'stroop',
       detailHtml: `헷갈리는 정보를 억누르고 규칙을 지키는 <b>논리 제어(좌측 전두엽)</b> 훈련이었어요.<br>` +
-        `글자를 읽으려는 습관을 참는 것이 핵심이에요!`,
+        `1단계는 글자를 읽으려는 습관을 참는 힘, ` +
+        `2단계는 직전 글자를 기억하며 규칙을 지키는 힘을 씁니다.`,
       retryFn: start,
     });
   }
@@ -1482,14 +1658,86 @@ const Quiz = (() => {
       answer: 0,
       why: '글 전체가 걷기의 좋은 점을 설명하고 있어요.',
     },
+    {
+      passage: '그는 사흘 밤을 새워 마침내 일을 끝냈다. 동료들은 그의 (        ) 태도에 감탄했다.',
+      question: '빈칸에 들어갈 말로 가장 알맞은 것은?',
+      choices: ['끈질긴', '무심한', '성급한', '느긋한'],
+      answer: 0,
+      why: '쉬지 않고 끝까지 해낸 모습이므로 "끈질긴"이 어울려요.',
+    },
+    {
+      passage: '오랜만에 만난 친구와 이야기를 나누다 보니 시간이 (        ) 흘러 버렸다.',
+      question: '빈칸에 들어갈 말로 가장 알맞은 것은?',
+      choices: ['훌쩍', '겨우', '억지로', '천천히'],
+      answer: 0,
+      why: '즐거워서 시간이 빠르게 지나갔다는 뜻이므로 "훌쩍"이 알맞아요.',
+    },
+    {
+      passage: '"소 잃고 외양간 고친다"라는 속담이 있다.',
+      question: '이 속담의 뜻으로 가장 알맞은 것은?',
+      choices: [
+        '일이 잘못된 뒤에야 뒤늦게 손을 쓴다.',
+        '소는 반드시 외양간에서 길러야 한다.',
+        '물건은 낡기 전에 버리는 것이 좋다.',
+        '이웃과 사이좋게 지내야 한다.',
+      ],
+      answer: 0,
+      why: '소를 잃은 다음에 외양간을 고쳐도 소용없다는 데서 나온 말이에요.',
+    },
+    {
+      passage: '비가 오면 소풍은 취소된다. 그런데 소풍은 취소되지 않았다.',
+      question: '두 문장으로부터 바르게 이끌어 낸 결론은?',
+      choices: [
+        '비가 오지 않았다.',
+        '비가 왔다.',
+        '소풍은 원래 없었다.',
+        '비가 와도 소풍을 간다.',
+      ],
+      answer: 0,
+      why: '비가 왔다면 취소되었을 텐데 취소되지 않았으니, 비가 오지 않은 거예요.',
+    },
+    {
+      passage: '(가) 편지를 봉투에 넣는다.\n(나) 편지를 쓴다.\n(다) 우체통에 넣는다.\n(라) 우표를 붙인다.',
+      question: '편지를 부치는 순서로 알맞게 배열한 것은?',
+      choices: [
+        '(나) → (가) → (라) → (다)',
+        '(가) → (나) → (다) → (라)',
+        '(라) → (다) → (나) → (가)',
+        '(나) → (다) → (가) → (라)',
+      ],
+      answer: 0,
+      why: '편지를 쓰고, 봉투에 넣고, 우표를 붙인 뒤 우체통에 넣어요.',
+    },
+    {
+      passage: '아침을 거르면 점심에 과식하기 쉽다. 또 오전 내내 기운이 없어 집중이 잘 되지 않는다. 간단하게라도 아침을 챙겨 먹는 것이 좋다.',
+      question: '이 글의 중심 내용으로 가장 알맞은 것은?',
+      choices: [
+        '아침은 간단하게라도 먹는 것이 좋다.',
+        '점심은 많이 먹을수록 좋다.',
+        '집중이 안 될 때는 잠을 자야 한다.',
+        '하루 두 끼만 먹어야 건강하다.',
+      ],
+      answer: 0,
+      why: '글 전체가 아침을 챙겨 먹어야 하는 이유를 설명하고 있어요.',
+    },
+    {
+      passage: '이 가게는 물건값이 무척 싸다.',
+      question: '밑줄 친 "싸다"와 바꾸어 쓸 수 있는 말은?',
+      choices: ['저렴하다', '비싸다', '넉넉하다', '무겁다'],
+      answer: 0,
+      why: '"싸다"는 값이 낮다는 뜻이므로 "저렴하다"와 바꿔 쓸 수 있어요.',
+    },
   ];
+
+  const PER_GAME = 5; // 매번 전체 문항 중 5개만 골라 출제
 
   let idx = 0, score = 0, history = [], order = [], shuffled = [];
 
   function start() {
     idx = 0; score = 0; history = [];
-    // 문제 순서도 매번 섞기
-    order = QUESTIONS.map((_, i) => i).sort(() => Math.random() - .5);
+    newSession();
+    // 매번 다른 문제가 다른 순서로 나오도록 섞은 뒤 앞에서 5개만 쓴다
+    order = QUESTIONS.map((_, i) => i).sort(() => Math.random() - .5).slice(0, PER_GAME);
     render();
     showScreen('screen-quiz');
   }
@@ -1552,7 +1800,7 @@ const Quiz = (() => {
     const detail = history
       .map((h, i) => `<div class="${h.ok ? 'rd-good' : 'rd-bad'}">${i + 1}번 문제 ${h.ok ? '⭕' : '❌'}</div>`)
       .join('');
-    showResult({ score, max: QUESTIONS.length, gameKey: 'quiz', detailHtml: detail, retryFn: start });
+    showResult({ score, max: order.length, gameKey: 'quiz', detailHtml: detail, retryFn: start });
   }
 
   return { start, next };
