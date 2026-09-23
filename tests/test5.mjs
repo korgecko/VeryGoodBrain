@@ -59,6 +59,48 @@ for (const [dx,dy] of [[0,-30],[-60,0],[60,10],[0,40],[-30,40],[40,-40]]) {
 }
 chk(!!picked, 'E9 뇌를 탭하면 영역이 선택됨', String(picked));
 
+// 손이 떨려도 탭으로 인식되어야 한다.
+// 움직인 거리를 더해 나가면 제자리 떨림도 쌓여 탭이 드래그로 묻힌다
+for (const wobble of [0, 3, 5]) {
+  await p.evaluate(()=>{ Brain3D.select(null);
+    document.querySelectorAll('.legend-chip.on').forEach(e=>e.classList.remove('on')); });
+  const mx = box.x + box.width/2, my = box.y + box.height/2;
+  await p.mouse.move(mx, my); await p.mouse.down();
+  for (let i=0;i<8;i++) await p.mouse.move(mx + (i%2?wobble:-wobble), my + (i%2?-wobble:wobble));
+  await p.mouse.move(mx, my); await p.mouse.up();
+  await p.waitForTimeout(140);
+  const got = await p.evaluate(()=>{const e=document.querySelector('.legend-chip.on b');return e?e.textContent:null;});
+  chk(!!got, `E9b 손이 ±${wobble}px 떨려도 탭으로 인식`, String(got));
+}
+
+// 뇌 위 어디를 눌러도 헛손질이 없고, 눌린 곳에 보이는 색과 맞아야 한다
+const aim = await p.evaluate(async ()=>{
+  const c = document.getElementById('home-brain-canvas');
+  const v = Brain3D.mount(c, {});
+  v.yaw = -1.25; v.pitch = 0.12; v.touched = performance.now() + 1e9;
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  const img = c.getContext('2d').getImageData(0,0,c.width,c.height).data;
+  const COL = {lfrontal:[34,197,94], rfrontal:[34,211,238], parietal:[192,132,252], temporal:[251,146,60]};
+  const norm = a => { const m = Math.max(...a)||1; return [a[0]/m, a[1]/m, a[2]/m]; };
+  const NC = {}; for (const k in COL) NC[k] = norm(COL[k]);
+  const rect = c.getBoundingClientRect();
+  let n=0, hit=0, agree=0;
+  for (let y=6; y<rect.height-6; y+=5) for (let x=6; x<rect.width-6; x+=5) {
+    const dx=Math.round(x*v.dpr), dy=Math.round(y*v.dpr), i=(dy*c.width+dx)*4;
+    const px=[img[i],img[i+1],img[i+2]];
+    if (px[0]+px[1]+px[2] < 150) continue;              // 배경
+    if (Math.max(...px)-Math.min(...px) < 28) continue; // 별(거의 무채색)
+    n++;
+    const q=norm(px); let near=null, nd=1e9;
+    for (const k in NC) { const d=(q[0]-NC[k][0])**2+(q[1]-NC[k][1])**2+(q[2]-NC[k][2])**2; if(d<nd){nd=d;near=k;} }
+    const got = Brain3D.pickAt(c, x, y);
+    if (got) { hit++; if (got === near) agree++; }
+  }
+  return { n, 잡힘:hit/n, 일치:agree/n };
+});
+chk(aim.잡힘 === 1, 'E9c 뇌 위 어디를 눌러도 헛손질 없음', `${(aim.잡힘*100).toFixed(1)}% (${aim.n}곳)`);
+chk(aim.일치 > 0.9, 'E9d 눌린 자리에 보이는 부위가 잡힘', `${(aim.일치*100).toFixed(1)}%`);
+
 // 드래그 방향: 손가락이 짚은 면(카메라에 가까운 쪽)이 손가락을 따라가야 한다.
 // 화면 픽셀로 재면 점이 겹쳐 밝아지는 탓에 밀집한 곳이 결과를 끌고 가므로,
 // 렌더러와 같은 식으로 '가까운 면의 한 점'을 직접 투영해 확인한다.

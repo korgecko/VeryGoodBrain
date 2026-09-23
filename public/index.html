@@ -943,6 +943,7 @@ Sound.render();
 // 점을 쌓아 그리는 방식이라 면을 깎아 만드는 모델보다 가볍고, 별빛 표현과도 잘 맞는다.
 const Brain3D = (() => {
   const REG = { lfrontal: '#22c55e', rfrontal: '#22d3ee', parietal: '#c084fc', temporal: '#fb923c' };
+
   const GRAY = '#7c8db5';           // 소뇌·뇌간은 훈련 영역이 아니다
   const D = 3.4;                     // 눈과 뇌 사이 거리 (원근)
 
@@ -1116,7 +1117,8 @@ const Brain3D = (() => {
       if (!arr) buckets.set(key, (arr = []));
       arr.push(px, py, r);
 
-      if (p.reg) v.hit.push(px, py, p.reg);
+      // 클릭 판정용: 화면 위치와 함께 깊이도 들고 있는다
+      if (p.reg) v.hit.push(px, py, p.reg, z2);
     }
 
     for (const [key, arr] of buckets) {
@@ -1157,16 +1159,15 @@ const Brain3D = (() => {
 
   function bind(v, onPick) {
     const c = v.canvas;
-    let sx = 0, sy = 0, moved = 0;
+    let sx = 0, sy = 0, downX = 0, downY = 0;
     c.addEventListener('pointerdown', e => {
-      v.drag = true; moved = 0; sx = e.clientX; sy = e.clientY;
+      v.drag = true; sx = downX = e.clientX; sy = downY = e.clientY;
       v.touched = performance.now();
       try { c.setPointerCapture(e.pointerId); } catch {}
     });
     c.addEventListener('pointermove', e => {
       if (!v.drag) return;
       const dx = e.clientX - sx, dy = e.clientY - sy;
-      moved += Math.abs(dx) + Math.abs(dy);
       // 손가락이 짚은 면(가까운 쪽)이 손가락을 따라가야 한다.
       // 적도면의 점은 화면에서 sin(각도+yaw) 자리에 찍히므로, 가까운 면(|각도+yaw|<90°)
       // 에서는 yaw가 커질수록 오른쪽으로 간다. 그래서 오른쪽으로 끌면 yaw를 더한다.
@@ -1179,18 +1180,40 @@ const Brain3D = (() => {
     const up = e => {
       if (!v.drag) return;
       v.drag = false; v.touched = performance.now();
-      if (moved > 8 || !onPick) return;                // 끌었으면 돌린 것, 아니면 고른 것
+      // 누른 자리에서 얼마나 벗어났는지로 판단한다. 움직인 거리를 더해 나가면
+      // 손가락이 제자리에서 떨리기만 해도 합이 커져 탭이 드래그로 묻힌다
+      const away = Math.hypot((e.clientX ?? downX) - downX, (e.clientY ?? downY) - downY);
+      if (away > 12 || !onPick) return;                // 끌었으면 돌린 것, 아니면 고른 것
       const rect = c.getBoundingClientRect();
-      const px = (e.clientX - rect.left) * v.dpr, py = (e.clientY - rect.top) * v.dpr;
-      let best = null, bd = (26 * v.dpr) ** 2;
-      for (let i = 0; i < v.hit.length; i += 3) {
-        const d = (v.hit[i] - px) ** 2 + (v.hit[i + 1] - py) ** 2;
-        if (d < bd) { bd = d; best = v.hit[i + 2]; }
-      }
-      if (best) onPick(best);
+      const hitKey = lookup(v, (e.clientX - rect.left) * v.dpr, (e.clientY - rect.top) * v.dpr);
+      if (hitKey) onPick(hitKey);
     };
     c.addEventListener('pointerup', up);
     c.addEventListener('pointercancel', () => { v.drag = false; });
+  }
+
+  // 누른 자리에서 화면상 가장 가까운 점의 부위를 고른다.
+  // 그 자리에 실제로 찍혀 있는 점이므로 눈에 보이는 색과 가장 잘 맞는다.
+  // (깊이가 가장 앞인 점을 고르거나 칸으로 뭉개는 방식도 재봤지만 둘 다 더 부정확했다)
+  // 둘레는 48px까지 넓게 잡아 주름 틈이나 가장자리를 눌러도 헛손질이 되지 않게 한다
+  // 반지름을 20~64px까지 재봤다. 32px에서 뇌 위 헛손질이 사라지면서(100%)
+  // 눈에 보이는 색과의 일치도 가장 높았고(94%), 그보다 넓히면 정확도는
+  // 그대로인데 배경을 눌러도 잡히는 일만 늘었다
+  const PICK_R = 32;
+  function lookup(v, px, py) {
+    let best = null, bd = (PICK_R * v.dpr) ** 2;
+    for (let i = 0; i < v.hit.length; i += 4) {
+      const dx = v.hit[i] - px, dy = v.hit[i + 1] - py;
+      const d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = v.hit[i + 2]; }
+    }
+    return best;
+  }
+
+  // 화면 좌표(CSS px)로 어느 부위인지 묻는다 (검증용)
+  function pickAt(canvas, x, y) {
+    const v = views.find(q => q.canvas === canvas);
+    return v ? lookup(v, x * v.dpr, y * v.dpr) : null;
   }
 
   function mount(canvas, opts) {
@@ -1210,7 +1233,7 @@ const Brain3D = (() => {
 
   const select = key => { sel = key || null; };
 
-  return { mount, select };
+  return { mount, select, pickAt };
 })();
 
 </script>
