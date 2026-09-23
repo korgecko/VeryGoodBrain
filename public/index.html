@@ -175,6 +175,7 @@ body {
 }
 .pcell:disabled { cursor: default; }
 .pcell.lit    { background: #fbbf24; border-color: #d97706; }
+.pcell.picked { background: var(--blue); border-color: var(--blue-dark); }
 .pcell.hit    { background: var(--good); border-color: var(--good); color: #fff; }
 .pcell.miss   { background: var(--bad); border-color: var(--bad); color: #fff; }
 .pcell.reveal { background: #fde68a; border-color: #f59e0b; }
@@ -1840,7 +1841,7 @@ const Pixel = (() => {
   const showMs = n => 1000 + n * 300; // 많이 켜질수록 더 오래 보여준다
 
   let no = 0, score = 0, streak = 0, sid = 0;
-  let lit = [], found = 0, lock = true;
+  let lit = [], picked = [], lock = true;
 
   function cells() { return [...document.querySelectorAll('#pixel-grid .pcell')]; }
 
@@ -1863,7 +1864,7 @@ const Pixel = (() => {
   function next() {
     no++;
     if (no > TOTAL) return finish();
-    lock = true; found = 0;
+    lock = true; picked = [];
     const n = COUNT[no - 1];
 
     document.getElementById('pixel-no').textContent = no;
@@ -1881,44 +1882,67 @@ const Pixel = (() => {
     // 보여준 뒤 끄고 입력을 받는다
     gameTimeout(sid, () => {
       cs.forEach(c => c.classList.remove('lit'));
-      document.getElementById('pixel-guide').textContent = `켜졌던 ${n}칸을 짚어보세요`;
+      showProgress(n);
       cs.forEach(c => (c.disabled = false));
       lock = false;
     }, showMs(n));
   }
 
-  function tap(i, btn) {
-    if (lock || btn.classList.contains('hit')) return;
-    const n = COUNT[no - 1];
-
-    if (lit.includes(i)) {
-      btn.classList.add('hit');
-      btn.textContent = '⭕';
-      found++;
-      if (found === n) return endRound(true);
-      return;
-    }
-    btn.classList.add('miss');
-    btn.textContent = '❌';
-    endRound(false);
+  function showProgress(n) {
+    document.getElementById('pixel-guide').textContent =
+      `켜졌던 ${n}칸을 짚어보세요 (${picked.length}/${n})`;
   }
 
-  function endRound(ok) {
+  // 누르는 동안에는 맞았는지 틀렸는지 알려주지 않는다.
+  // 개수를 다 채운 뒤에 한꺼번에 채점해야 내가 고른 것과 정답을 나란히 비교할 수 있다.
+  function tap(i, btn) {
+    if (lock) return;
+    const n = COUNT[no - 1];
+    const at = picked.indexOf(i);
+
+    if (at >= 0) {            // 이미 고른 칸을 다시 누르면 취소 (잘못 눌렀을 때 되돌릴 수 있게)
+      picked.splice(at, 1);
+      btn.classList.remove('picked');
+    } else {
+      if (picked.length >= n) return;
+      picked.push(i);
+      btn.classList.add('picked');
+    }
+
+    showProgress(n);
+    if (picked.length === n) gameTimeout(sid, endRound, 250); // 마지막 칸이 눌린 게 보이도록 잠깐 둔다
+  }
+
+  function endRound() {
     lock = true;
     const cs = cells();
     cs.forEach(c => (c.disabled = true));
+
+    const hit = picked.filter(i => lit.includes(i));
+    const ok = hit.length === lit.length;
+
+    // 내가 고른 것: 맞으면 ⭕ 틀리면 ❌ / 놓친 칸: 노란색
+    cs.forEach(c => c.classList.remove('picked'));
+    picked.forEach(i => {
+      if (lit.includes(i)) { cs[i].classList.add('hit'); cs[i].textContent = '⭕'; }
+      else { cs[i].classList.add('miss'); cs[i].textContent = '❌'; }
+    });
+    lit.forEach(i => { if (!picked.includes(i)) cs[i].classList.add('reveal'); });
+
     const fb = document.getElementById('pixel-feedback');
     if (ok) {
-      score++; streak++;
+      score++;
+      streak++;
       Sound.correct(streak);
+      document.getElementById('pixel-guide').textContent = '모두 맞히셨어요!';
       fb.innerHTML = `<span class="feedback-good">⭕ 정답!${streakText(streak)}</span>`;
     } else {
       streak = 0;
-      // 못 찾은 칸을 보여줘야 다음 판에 도움이 된다
-      lit.forEach(i => { if (!cs[i].classList.contains('hit')) cs[i].classList.add('reveal'); });
-      fb.innerHTML = '<span class="feedback-bad">❌ 아쉬워요! 노란 칸이 정답이에요</span>';
+      document.getElementById('pixel-guide').textContent = '노란 칸이 놓친 곳이에요';
+      fb.innerHTML = `<span class="feedback-bad">❌ ${lit.length}칸 중 ${hit.length}칸 맞았어요</span>`;
     }
-    gameTimeout(sid, next, ok ? 800 : 1800);
+    // 틀렸을 때는 고른 것과 정답을 견줘볼 시간이 더 필요하다
+    gameTimeout(sid, next, ok ? 900 : 2600);
   }
 
   function finish() {

@@ -71,8 +71,11 @@ const g = await p.evaluate(async ()=>{
     const enabled=[...document.querySelectorAll('.pcell')].some(c=>!c.disabled);
     const before=window.__osc;
     // 켜졌던 칸을 그대로 짚는다
-    litBefore.forEach(i=>document.querySelectorAll('.pcell')[i].click());
-    log.push({r, banner, n:litBefore.length, disabledWhileShowing, stillLit, enabled,
+    const cs=[...document.querySelectorAll('.pcell')];
+    litBefore.forEach(i=>cs[i].click());
+    const 고른뒤안내=document.getElementById('pixel-guide').textContent;
+    await new Promise(r2=>setTimeout(r2,400));   // 채점까지 기다린다
+    log.push({r, banner, n:litBefore.length, disabledWhileShowing, stillLit, enabled, 고른뒤안내,
               소리:window.__osc>before,
               fb:document.getElementById('pixel-feedback').innerText});
     await new Promise(r2=>setTimeout(r2,900));
@@ -85,25 +88,57 @@ chk(g.log.every(r=>r.stillLit===0 && r.enabled), 'F2 불이 꺼진 뒤 입력 �
 chk(JSON.stringify(g.log.map(r=>r.n))==='[3,3,4,4,5,5,6,6]', 'F3 칸 수가 3→6으로 늘어남', JSON.stringify(g.log.map(r=>r.n)));
 chk(g.log.every(r=>r.banner===r.n+'칸'), 'F4 배너에 칸 수 표시', JSON.stringify(g.log.map(r=>r.banner)));
 chk(g.log.every(r=>r.fb.includes('정답')), 'F5 제대로 짚으면 정답', JSON.stringify(g.log.map(r=>r.fb)));
+chk(g.log.every(r=>/\(\d+\/\d+\)/.test(r.고른뒤안내)||r.고른뒤안내.includes('맞히셨')),
+    'F5b 고르는 동안 진행 상황 표시', JSON.stringify(g.log.map(r=>r.고른뒤안내)));
 chk(g.log.every(r=>r.소리), 'F6 정답마다 효과음', JSON.stringify(g.log.map(r=>r.소리)));
 chk(g.screen==='screen-result' && g.score==='8점', 'F7 전부 맞히면 8/8', g.screen+' '+g.score);
 
-// 오답 처리
+// 오답 처리: 틀린 칸을 눌러도 개수를 다 채울 때까지 채점하지 않아야 한다
 const wrong = await p.evaluate(async ()=>{
   Pixel.start();
   const lit=[...document.querySelectorAll('.pcell.lit')].map(c=>+c.dataset.i);
   await new Promise(r=>setTimeout(r,1000+lit.length*300+120));
   const cells=[...document.querySelectorAll('.pcell')];
-  const wrongIdx=cells.findIndex(c=>!lit.includes(+c.dataset.i));
+  const fb=()=>document.getElementById('pixel-feedback').innerText;
+  const guide=()=>document.getElementById('pixel-guide').textContent;
+  const wrongIdx=+cells.find(c=>!lit.includes(+c.dataset.i)).dataset.i;
+
+  // 첫 칸부터 일부러 틀리게 누른다
   cells[wrongIdx].click();
-  return {fb:document.getElementById('pixel-feedback').innerText,
+  const 틀린칸직후={fb:fb(), guide:guide(),
+    아직판정없음:document.querySelectorAll('.pcell.miss,.pcell.hit,.pcell.reveal').length===0,
+    선택표시:document.querySelectorAll('.pcell.picked').length,
+    계속입력가능:cells.some(c=>!c.disabled)};
+
+  // 되돌리기: 같은 칸을 다시 눌러 선택 취소
+  cells[wrongIdx].click();
+  const 취소후={선택수:document.querySelectorAll('.pcell.picked').length, guide:guide()};
+  cells[wrongIdx].click(); // 다시 고른다
+
+  // 나머지는 정답 칸으로 채워 개수를 맞춘다 (틀린 것 1 + 맞는 것 n-1)
+  lit.slice(0, lit.length-1).forEach(i=>cells[i].click());
+  const 채우는중={fb:fb(), 입력가능:cells.some(c=>!c.disabled)};
+  await new Promise(r=>setTimeout(r,400)); // 채점 대기
+
+  return {n:lit.length, 틀린칸직후, 취소후, 채우는중,
+          fb:fb(), guide:guide(),
+          hit:document.querySelectorAll('.pcell.hit').length,
           miss:document.querySelectorAll('.pcell.miss').length,
-          reveal:document.querySelectorAll('.pcell.reveal').length, n:lit.length,
+          reveal:document.querySelectorAll('.pcell.reveal').length,
           입력잠김:cells.every(c=>c.disabled)};
 });
-chk(wrong.fb.includes('아쉬워요') && wrong.miss===1, 'G1 틀린 칸 표시', JSON.stringify(wrong));
-chk(wrong.reveal===wrong.n, 'G2 못 찾은 칸을 알려줌', JSON.stringify(wrong));
-chk(wrong.입력잠김, 'G3 오답 후 입력 잠김');
+chk(wrong.틀린칸직후.아직판정없음 && wrong.틀린칸직후.계속입력가능,
+    'G1 틀린 칸을 눌러도 바로 채점하지 않음', JSON.stringify(wrong.틀린칸직후));
+chk(wrong.틀린칸직후.선택표시===1 && wrong.틀린칸직후.guide.includes('(1/'),
+    'G2 고른 칸은 표시되고 진행 상황이 보임', JSON.stringify(wrong.틀린칸직후));
+chk(wrong.취소후.선택수===0 && wrong.취소후.guide.includes('(0/'),
+    'G3 다시 누르면 선택 취소', JSON.stringify(wrong.취소후));
+chk(wrong.채우는중.fb==='' , 'G4 개수를 채우기 전에는 채점 안 됨', JSON.stringify(wrong.채우는중));
+chk(wrong.hit===wrong.n-1 && wrong.miss===1 && wrong.reveal===1,
+    'G5 채운 뒤 내가 고른 것과 정답을 함께 보여줌', JSON.stringify(wrong));
+chk(wrong.fb.includes(`${wrong.n}칸 중 ${wrong.n-1}칸`), 'G6 몇 칸 맞았는지 알려줌', wrong.fb);
+chk(wrong.guide.includes('놓친 곳'), 'G7 놓친 칸 안내', wrong.guide);
+chk(wrong.입력잠김, 'G8 채점 후 입력 잠김');
 
 // 나가기 (세션 가드)
 await p.evaluate(()=>{Pixel.start();});
