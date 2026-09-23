@@ -60,6 +60,13 @@ body {
   padding: 8px 0 20px;
 }
 .app-header h1 { font-size: 1.4rem; color: var(--blue-dark); }
+.header-right { display: flex; align-items: center; gap: 10px; }
+.sound-btn {
+  background: var(--card); border: 2px solid var(--line); border-radius: 999px;
+  width: 44px; height: 44px; font-size: 1.25rem; line-height: 1;
+  cursor: pointer; color: var(--text); padding: 0;
+}
+.sound-btn:active { transform: scale(.94); }
 .points-badge {
   background: #fef3c7; border: 2px solid #f59e0b; border-radius: 999px;
   padding: 6px 14px; font-weight: bold; font-size: 1.05rem;
@@ -410,7 +417,10 @@ body {
 <section id="screen-home" class="screen active">
   <header class="app-header">
     <h1>베리굿브레인</h1>
-    <div class="points-badge">🏅 <span id="total-points">0</span> P</div>
+    <div class="header-right">
+      <button id="sound-btn" class="sound-btn" onclick="Sound.toggle()" aria-label="소리 켜고 끄기">🔊</button>
+      <div class="points-badge">🏅 <span id="total-points">0</span> P</div>
+    </div>
   </header>
 
   <h2 class="section-title">나의 뇌 대시보드</h2>
@@ -649,6 +659,71 @@ function renderBests() {
   });
 }
 
+// 효과음. 소리 파일을 쓰면 단일 HTML 파일이 깨지므로 브라우저에서 직접 만든다.
+const Sound = (() => {
+  const KEY = 'vgb_sound';
+  let ctx = null;
+
+  function isOn() {
+    try { return localStorage.getItem(KEY) !== 'off'; } catch { return true; }
+  }
+
+  // 브라우저는 사용자가 화면을 누르기 전에는 소리를 못 내게 막는다.
+  // 정답을 누른 순간 호출되므로 그때 만들어도 늦지 않다.
+  function audio() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
+    }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  function play(freqs) {
+    if (!isOn()) return;
+    let c = null;
+    try { c = audio(); } catch { return; }
+    if (!c) return;
+    const step = 0.085;
+    freqs.forEach((f, i) => {
+      try {
+        const t = c.currentTime + i * step;
+        const osc = c.createOscillator(), gain = c.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(f, t);
+        // 소리를 뚝 끊으면 '딸깍' 잡음이 난다. 서서히 올렸다 내린다
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(0.2, t + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + step + 0.05);
+        osc.connect(gain).connect(c.destination);
+        osc.start(t);
+        osc.stop(t + step + 0.06);
+      } catch {}
+    });
+  }
+
+  // 나이가 들면 높은 소리부터 안 들리므로 중간 음역(도~솔)을 쓴다.
+  // 너무 높게 잡으면 정작 들려줘야 할 분들이 못 듣는다.
+  function correct(streak = 0) {
+    play(streak >= 3 ? [523, 659, 784] : [523, 784]); // 3연속부터 한 음 더
+  }
+
+  function render() {
+    const el = document.getElementById('sound-btn');
+    if (el) el.textContent = isOn() ? '🔊' : '🔇';
+  }
+
+  function toggle() {
+    const next = !isOn();
+    try { localStorage.setItem(KEY, next ? 'on' : 'off'); } catch {}
+    render();
+    if (next) correct(); // 켤 때 어떤 소리인지 한 번 들려준다
+  }
+
+  return { correct, toggle, render, isOn };
+})();
+
 // 출석 스탬프: 게임을 하나라도 끝낸 날에 도장이 찍힌다
 const Attend = (() => {
   const KEY = 'vgb_days';
@@ -735,6 +810,7 @@ function goHome() {
   renderPoints();
   renderBests();
   Attend.render();
+  Sound.render();
   if (typeof Region !== 'undefined') Region.renderHome(); // 대시보드 기록 갱신
 }
 
@@ -764,6 +840,7 @@ function showResult({ score, max, detailHtml, retryFn, gameKey }) {
 renderPoints();
 renderBests();
 Attend.render();
+Sound.render();
 
 </script>
 <script>
@@ -1149,6 +1226,7 @@ const Shape = (() => {
     const fb = document.getElementById('shape-feedback');
     if (ok) {
       score++; streak++;
+      Sound.correct(streak);
       btn.classList.add('choice-good');
       fb.innerHTML = `<span class="feedback-good">⭕ 정답!${streakText(streak)}</span>`;
     } else {
@@ -1277,6 +1355,7 @@ const Speed = (() => {
     const fb = document.getElementById('speed-feedback');
     if (ok) {
       score++; streak++;
+      Sound.correct(streak);
       fb.innerHTML = `<span class="feedback-good">⭕ 정답!${streakText(streak)}</span>`;
     } else {
       streak = 0;
@@ -1366,6 +1445,7 @@ const Stroop = (() => {
     const fb = document.getElementById('stroop-feedback');
     if (ok) {
       score++; streak++;
+      Sound.correct(streak);
       fb.innerHTML = `<span class="feedback-good">⭕ 정답!${streakText(streak)}</span>`;
     } else {
       streak = 0;
@@ -1440,6 +1520,7 @@ const Memory = (() => {
     if (a.dataset.animal === b.dataset.animal) {
       a.classList.add('matched'); b.classList.add('matched');
       matched++;
+      Sound.correct(matched);
       document.getElementById('memory-score').textContent = matched;
       if (matched === PAIRS) gameTimeout(sid, finish, 600);
     } else {
@@ -1639,7 +1720,7 @@ const Flag = (() => {
     clearTimeout(timer); clearTimeout(earlyTimer); clearInterval(tickTimer);
 
     const ok = state.blue === target.blue && state.white === target.white;
-    if (ok) score++;
+    if (ok) { score++; Sound.correct(); }
     history.push({ command, ok });
 
     // 정답 화면(피드백) 표시
@@ -1872,6 +1953,7 @@ const Sort = (() => {
     const fb = document.getElementById('sort-feedback');
     if (ok) {
       score++; streak++;
+      Sound.correct(streak);
       counts[key] = (counts[key] || 0) + 1;
       btn.classList.add('pop');
       btn.querySelector('.sort-bin-count').textContent = counts[key] + '장';
@@ -2075,7 +2157,7 @@ const Quiz = (() => {
     buttons.forEach(b => (b.disabled = true));
 
     const ok = shuffled[i].ok;
-    if (ok) score++;
+    if (ok) { score++; Sound.correct(); }
     history.push({ q: q.question, ok });
 
     buttons[shuffled.findIndex(c => c.ok)].classList.add('correct');
