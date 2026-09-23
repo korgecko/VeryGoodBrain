@@ -175,6 +175,7 @@ body {
 }
 .pcell:disabled { cursor: default; }
 .pcell.lit    { background: #fbbf24; border-color: #d97706; }
+.pcell.picked { background: var(--blue); border-color: var(--blue-dark); }
 .pcell.hit    { background: var(--good); border-color: var(--good); color: #fff; }
 .pcell.miss   { background: var(--bad); border-color: var(--bad); color: #fff; }
 .pcell.reveal { background: #fde68a; border-color: #f59e0b; }
@@ -336,7 +337,6 @@ body {
 .region-temporal { background: #ea580c; }
 .region-rfrontal { background: #0891b2; }
 .region-lfrontal { background: #16a34a; }
-.region-occipital { background: #db2777; }
 .mission-best { font-size: .9rem; color: var(--text-sub); margin-top: 6px; }
 .sub-title { margin-top: 26px; font-size: 1.05rem; color: var(--text-sub); }
 .mission-sub { padding: 14px 18px; }
@@ -346,13 +346,29 @@ body {
 }
 
 /* ---------- 뇌 영역 소개 페이지 ---------- */
-.region-brain {
-  background: var(--card); border: 2px solid var(--line); border-radius: 20px;
-  padding: 14px 10px; margin-bottom: 14px;
+/* 뇌는 우주를 배경으로 한 점빛 덩어리. 밝은 화면에서도 배경은 늘 어둡게 둔다 */
+.brain-stage {
+  position: relative; border-radius: 20px; overflow: hidden;
+  background: #05070f; border: 2px solid #1b2440; margin-bottom: 12px;
+  touch-action: none; /* 끌어서 돌릴 때 화면이 같이 스크롤되지 않도록 */
 }
-/* height는 SVG 속성으로 'auto'를 받지 못하므로 CSS에서 비율에 맞춘다 */
-.region-brain svg { display: block; width: 100%; height: auto; }
-.region-brain .lobe-on { filter: drop-shadow(0 3px 7px rgba(30,41,59,.3)); }
+.brain-stage canvas { display: block; width: 100%; height: auto; }
+.brain-hint {
+  position: absolute; left: 0; right: 0; bottom: 8px; text-align: center;
+  color: #8ea2c8; font-size: .85rem; pointer-events: none;
+}
+
+.legend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 18px; }
+.legend-chip {
+  display: flex; align-items: center; gap: 8px; text-align: left;
+  background: var(--card); border: 2px solid var(--line); border-radius: 14px;
+  padding: 10px 8px; cursor: pointer; color: var(--text);
+}
+.legend-chip.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, var(--card)); }
+.legend-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--c); flex: none; }
+.legend-text { display: flex; flex-direction: column; line-height: 1.25; }
+.legend-text b { font-size: .98rem; }
+.legend-text small { color: var(--text-sub); font-size: .8rem; }
 .region-info { margin-bottom: 16px; }
 .region-badge {
   display: inline-block; color: #fff; border-radius: 999px;
@@ -442,7 +458,11 @@ body {
 
   <h2 class="section-title">나의 뇌 대시보드</h2>
 
-  <div id="home-brain" class="region-brain"></div>
+  <div class="brain-stage">
+    <canvas id="home-brain-canvas" aria-label="뇌 그림"></canvas>
+    <div class="brain-hint">손가락으로 돌려보세요</div>
+  </div>
+  <div id="home-legend" class="legend-grid"></div>
   <div id="home-regions" class="mission-list"></div>
 
   <div id="home-attend" class="attend-card"></div>
@@ -458,7 +478,9 @@ body {
     <div class="game-stat"></div>
   </header>
 
-  <div id="region-brain" class="region-brain"></div>
+  <div class="brain-stage">
+    <canvas id="region-brain-canvas" aria-label="뇌 그림"></canvas>
+  </div>
 
   <div class="region-info">
     <div id="region-badge" class="region-badge">두정엽 · 공간 지각</div>
@@ -874,7 +896,271 @@ Sound.render();
 
 </script>
 <script>
-// 뇌 대시보드(홈: 클릭형 뇌 그림 + 4방면 라벨) + 영역별 페이지(게임 선택)
+// 뇌 그림: 우주에 떠 있는 점빛 덩어리. 손으로 돌려볼 수 있다.
+// 3D 라이브러리를 쓰면 단일 HTML 파일로 배포할 수 없게 되므로 회전·투영을 직접 계산한다.
+// 점을 쌓아 그리는 방식이라 면을 깎아 만드는 모델보다 가볍고, 별빛 표현과도 잘 맞는다.
+const Brain3D = (() => {
+  const REG = { lfrontal: '#22c55e', rfrontal: '#22d3ee', parietal: '#c084fc', temporal: '#fb923c' };
+  const GRAY = '#7c8db5';           // 소뇌·뇌간은 훈련 영역이 아니다
+  const D = 3.4;                     // 눈과 뇌 사이 거리 (원근)
+
+  let pts = null, stars = null, sel = null, raf = 0;
+  const views = [];                  // 화면에 붙은 캔버스들
+
+  // ---- 점구름 만들기 ----
+  let seed = 20260923;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+  function build() {
+    const out = [];
+    const N = 1500;
+    const GA = Math.PI * (3 - Math.sqrt(5));   // 황금각: 구면에 고르게 뿌린다
+
+    for (let i = 0; i < N; i++) {
+      const yy = 1 - 2 * (i + 0.5) / N;
+      const rr = Math.sqrt(Math.max(0, 1 - yy * yy));
+      const th = GA * i;
+      let x = Math.cos(th) * rr, y = yy, z = Math.sin(th) * rr;
+
+      // 뇌주름. 한 겹만 주면 잔물결처럼 보여서 굵은 결과 잔결을 겹친다
+      const g = 1
+        + 0.075 * Math.sin(7.1 * x + 1.7) * Math.sin(6.3 * z + 0.5)
+        + 0.040 * Math.sin(12.5 * z + 2.1) * Math.sin(10.2 * x + 0.9)
+        + 0.028 * Math.sin(9.4 * y + 3.1);
+
+      x *= 0.88 * g; y *= 0.86 * g; z *= 1.10 * g;
+
+      // 앞뒤 끝을 좁혀 달걀 모양으로 만든다. 뭉툭하면 원통처럼 보인다.
+      // 이마는 둥글고 뒤통수가 더 좁으므로 앞뒤를 같은 세기로 좁히면 안 된다
+      const taper = 1
+        - 0.30 * Math.pow(Math.max(0, z - 0.45), 1.3)      // 이마: 살짝만
+        - 0.48 * Math.pow(Math.max(0, -z - 0.40), 1.3);    // 뒤통수: 더 좁게
+      x *= taper; y *= taper;
+
+      // 이마 아래를 깎아 눈 위 곡선을 만든다
+      if (z > 0.35) y += ((z - 0.35) / 0.9) * 0.22 * Math.max(0, -y - 0.10);
+      // 아래는 납작하게 (진짜 뇌는 바닥이 평평하다)
+      if (y < -0.30) y = -0.30 + (y + 0.30) * 0.60;
+      // 좌우 고랑을 따라 안쪽으로 꺼지게
+      y -= Math.exp(-((x / 0.10) ** 2)) * 0.12 * Math.max(0, y + 0.15);
+
+      // 황금각으로 뿌리면 나선 무늬가 눈에 띈다. 살짝 흔들어 지운다
+      x += (rnd() - 0.5) * 0.035; y += (rnd() - 0.5) * 0.035; z += (rnd() - 0.5) * 0.035;
+
+      // 좌우를 가르는 세로 고랑: 위에서 봤을 때 두 반구가 갈라져 보여야 한다.
+      // 꺼지게 하는 것만으로는 위에서 티가 안 나서 가운데 점을 아예 비운다
+      if (Math.abs(x) < 0.075 && y > -0.02) continue;
+      // 실비우스 고랑: 옆면에서 이마엽과 관자엽을 가르는 틈
+      if (Math.abs(x) > 0.28 && Math.abs(y - (-0.02 - 0.34 * z)) < 0.055) continue;
+
+      out.push(mk(x, y, z, region(x, y, z)));
+    }
+
+    // 속을 채우는 점. 겉껍질만 있으면 돌릴 때 속 빈 껍데기로 보인다
+    for (let i = 0; i < 300; i++) {
+      const u = rnd() * Math.PI * 2, v = Math.acos(2 * rnd() - 1);
+      const s2 = Math.sin(v), k = 0.45 + rnd() * 0.30;
+      const x = 0.90 * k * s2 * Math.cos(u);
+      const y = 0.70 * k * Math.cos(v) - 0.04;
+      const z = 1.20 * k * s2 * Math.sin(u);
+      // 속 점이 고랑을 메우면 위에서 봤을 때 골이 사라진다
+      if (Math.abs(x) < 0.09 && y > -0.05) continue;
+      out.push(mk(x, y, z, region(x, y, z)));
+    }
+
+    // 관자엽: 귀 옆으로 불룩 튀어나온 덩어리 (양쪽)
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 80; i++) {
+        const u = rnd() * Math.PI * 2, v = Math.acos(2 * rnd() - 1), s2 = Math.sin(v);
+        out.push(mk(side * (0.46 + 0.17 * s2 * Math.cos(u)),
+                    -0.40 + 0.15 * Math.cos(v),
+                    0.12 + 0.44 * s2 * Math.sin(u), 'temporal'));
+      }
+    }
+
+    // 소뇌: 뒤 아래에 붙은 작은 덩어리, 가로 결이 특징
+    for (let i = 0; i < 260; i++) {
+      const u = rnd() * Math.PI * 2, v = Math.acos(2 * rnd() - 1), s2 = Math.sin(v);
+      const cv = Math.cos(v);
+      out.push(mk(0.44 * s2 * Math.cos(u),
+                  -0.50 + 0.23 * cv + 0.026 * Math.sin(16 * cv),
+                  -0.74 + 0.30 * s2 * Math.sin(u), null));
+    }
+    // 뇌간
+    for (let i = 0; i < 90; i++) {
+      const t = i / 90, a = rnd() * Math.PI * 2, r = 0.14 * (1 - 0.35 * t);
+      out.push(mk(Math.cos(a) * r, -0.38 - t * 0.58, -0.30 + Math.sin(a) * r - t * 0.12, null));
+    }
+    return out;
+  }
+
+  const mk = (x, y, z, reg) => ({ x, y, z, reg, c: reg ? REG[reg] : GRAY, tw: rnd() });
+
+  // 좌표로 어느 영역인지 정한다. z+ 가 앞(이마), y+ 가 위
+  function region(x, y, z) {
+    if (z > 0.38) return x < 0 ? 'lfrontal' : 'rfrontal';   // 이마: 좌/우로 나뉜다
+    if (y < -0.12 && z > -0.35 && Math.abs(x) > 0.24) return 'temporal'; // 귀 옆 아래
+    return 'parietal';                                      // 나머지 위쪽·뒤쪽
+  }
+
+  function buildStars() {
+    const out = [];
+    for (let i = 0; i < 140; i++) out.push({ x: rnd(), y: rnd(), r: rnd() * 1.1 + 0.3, tw: rnd() });
+    return out;
+  }
+
+  // ---- 그리기 ----
+  function draw(v, t) {
+    const { canvas, ctx } = v;
+    const w = canvas.width, h = canvas.height, dpr = v.dpr;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#05070f';
+    ctx.fillRect(0, 0, w, h);
+
+    // 은은한 성운
+    const neb = ctx.createRadialGradient(w * .5, h * .5, 0, w * .5, h * .5, w * .62);
+    neb.addColorStop(0, 'rgba(56,76,140,.30)');
+    neb.addColorStop(1, 'rgba(5,7,15,0)');
+    ctx.fillStyle = neb;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.globalCompositeOperation = 'lighter';
+
+    // 별빛
+    for (const st of stars) {
+      const a = 0.35 + 0.45 * Math.sin(t / 900 + st.tw * 9);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = '#cfe0ff';
+      ctx.beginPath();
+      ctx.arc(st.x * w, st.y * h, st.r * dpr, 0, 6.2832);
+      ctx.fill();
+    }
+
+    // 뇌
+    const cx = w / 2, cy = h / 2, scale = Math.min(w, h) * 0.36;
+    const cy1 = Math.cos(v.yaw), sy1 = Math.sin(v.yaw);
+    const cp = Math.cos(v.pitch), sp = Math.sin(v.pitch);
+
+    // 색과 밝기별로 모아서 한 번에 칠한다 (점마다 칠하면 휴대폰에서 버겁다)
+    const buckets = new Map();
+    v.hit.length = 0;
+    for (const p of pts) {
+      const x1 = p.x * cy1 + p.z * sy1;
+      const z1 = -p.x * sy1 + p.z * cy1;
+      const y2 = p.y * cp - z1 * sp;
+      const z2 = p.y * sp + z1 * cp;
+      const k = D / (D - z2);
+      const px = cx + x1 * k * scale;
+      const py = cy - y2 * k * scale;
+
+      const dim = sel && p.reg && p.reg !== sel ? 0.22 : (p.reg ? 1 : 0.5);
+      const depth = (k - 0.75) / 0.75;                  // 앞에 있을수록 1에 가깝다
+      let a = (0.07 + 0.78 * Math.pow(Math.max(0, Math.min(1, depth)), 1.6)) * dim;
+      if (sel && p.reg === sel) a = Math.min(1, a * 1.35 + 0.12 * Math.sin(t / 420 + p.tw * 6));
+      const r = (0.7 + 1.5 * Math.max(0, depth)) * (sel && p.reg === sel ? 1.35 : 1) * dpr;
+
+      const step = Math.max(1, Math.round(a * 6));
+      const key = p.c + '|' + step;
+      let arr = buckets.get(key);
+      if (!arr) buckets.set(key, (arr = []));
+      arr.push(px, py, r);
+
+      if (p.reg) v.hit.push(px, py, p.reg);
+    }
+
+    for (const [key, arr] of buckets) {
+      const [col, step] = key.split('|');
+      ctx.globalAlpha = Math.min(1, step / 6);
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      for (let i = 0; i < arr.length; i += 3) {
+        ctx.moveTo(arr[i] + arr[i + 2], arr[i + 1]);
+        ctx.arc(arr[i], arr[i + 1], arr[i + 2], 0, 6.2832);
+      }
+      ctx.fill();
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function resize(v) {
+    const rect = v.canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const cssH = Math.round(rect.width * 0.78);
+    v.canvas.style.height = cssH + 'px';
+    v.canvas.width = Math.round(rect.width * dpr);
+    v.canvas.height = Math.round(cssH * dpr);
+    v.dpr = dpr;
+  }
+
+  function loop(t) {
+    raf = requestAnimationFrame(loop);
+    for (const v of views) {
+      if (!v.canvas.offsetParent) continue;            // 안 보이는 화면은 그리지 않는다
+      if (v.canvas.clientWidth && v.canvas.width !== Math.round(v.canvas.clientWidth * v.dpr)) resize(v);
+      if (!v.drag && t - v.touched > 2500) v.yaw += 0.0012;   // 손을 떼면 아주 천천히 돈다
+      draw(v, t);
+    }
+  }
+
+  function bind(v, onPick) {
+    const c = v.canvas;
+    let sx = 0, sy = 0, moved = 0;
+    c.addEventListener('pointerdown', e => {
+      v.drag = true; moved = 0; sx = e.clientX; sy = e.clientY;
+      v.touched = performance.now();
+      try { c.setPointerCapture(e.pointerId); } catch {}
+    });
+    c.addEventListener('pointermove', e => {
+      if (!v.drag) return;
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      moved += Math.abs(dx) + Math.abs(dy);
+      v.yaw += dx * 0.011;
+      v.pitch = Math.max(-0.9, Math.min(0.9, v.pitch - dy * 0.009));
+      sx = e.clientX; sy = e.clientY;
+      v.touched = performance.now();
+    });
+    const up = e => {
+      if (!v.drag) return;
+      v.drag = false; v.touched = performance.now();
+      if (moved > 8 || !onPick) return;                // 끌었으면 돌린 것, 아니면 고른 것
+      const rect = c.getBoundingClientRect();
+      const px = (e.clientX - rect.left) * v.dpr, py = (e.clientY - rect.top) * v.dpr;
+      let best = null, bd = (26 * v.dpr) ** 2;
+      for (let i = 0; i < v.hit.length; i += 3) {
+        const d = (v.hit[i] - px) ** 2 + (v.hit[i + 1] - py) ** 2;
+        if (d < bd) { bd = d; best = v.hit[i + 2]; }
+      }
+      if (best) onPick(best);
+    };
+    c.addEventListener('pointerup', up);
+    c.addEventListener('pointercancel', () => { v.drag = false; });
+  }
+
+  function mount(canvas, opts) {
+    if (!canvas) return;
+    if (!pts) { pts = build(); stars = buildStars(); }
+    let v = views.find(x => x.canvas === canvas);
+    if (!v) {
+      v = { canvas, ctx: canvas.getContext('2d'), dpr: 1, yaw: -1.25, pitch: 0.12,   // 옆에서 살짝 비껴본 각도가 가장 뇌처럼 보인다
+            drag: false, touched: 0, hit: [] };
+      views.push(v);
+      resize(v);
+      bind(v, opts.onPick);
+      if (!raf) raf = requestAnimationFrame(loop);
+    }
+    return v;
+  }
+
+  const select = key => { sel = key || null; };
+
+  return { mount, select };
+})();
+
+</script>
+<script>
+// 뇌 대시보드(홈: 돌려보는 뇌 그림 + 색 칩) + 영역별 페이지(게임 선택)
 const Region = (() => {
   const REGIONS = {
     parietal: {
@@ -892,6 +1178,7 @@ const Region = (() => {
       games: [
         { icon: '⚡', name: '같은 그림 판별', how: '직전 그림과 같은지 빠르게 ⭕/❌ 판단하세요', best: 'speed', start: () => Speed.start() },
         { icon: '🧠', name: '카드 뒤집기', how: '같은 동물 카드 두 장의 짝을 찾으세요', best: 'memory_flips', start: () => Memory.start() },
+        { icon: '🔲', name: '불빛 기억', how: '잠깐 켜졌다 꺼진 칸을 그대로 짚어보세요', best: 'pixel', start: () => Pixel.start() },
       ],
     },
     rfrontal: {
@@ -901,14 +1188,6 @@ const Region = (() => {
       games: [
         { icon: '📖', name: '문맥 퀴즈', how: '글의 흐름에 맞는 답을 골라보세요', best: 'quiz', start: () => Quiz.start() },
         { icon: '🗂️', name: '낱말 나누기', how: '카드를 뒤집어 같은 종류끼리 모으세요', best: 'sort', start: () => Sort.start() },
-      ],
-    },
-    occipital: {
-      title: '후두엽', func: '시각·형태', color: '#db2777', cls: 'region-occipital',
-      short: '눈으로 본 것을 알아보고 잠깐 붙잡아 두는 힘',
-      desc: '머리 뒤쪽에 있는 후두엽은 눈으로 들어온 것을 알아보는 일을 해요. 모양과 색, 어디에 무엇이 있었는지를 순간적으로 붙잡아 두는 힘입니다.',
-      games: [
-        { icon: '🔲', name: '불빛 기억', how: '잠깐 켜졌다 꺼진 칸을 그대로 짚어보세요', best: 'pixel', start: () => Pixel.start() },
       ],
     },
     lfrontal: {
@@ -922,134 +1201,8 @@ const Region = (() => {
     },
   };
 
-  // 뇌 부위 경로 (옆모습, 왼쪽이 앞) - 전두엽은 좌/우 클릭을 위해 위/아래로 분할
-  const PARTS = {
-    lfrontal: 'M100 22 C 60 20, 30 45, 30 75 L 31 80 L 93 66 C 96 51, 98 37, 100 22 Z',
-    rfrontal: 'M31 80 C 33 92, 41 100, 52 104 C 62 92, 78 84, 88 82 C 90 77, 92 71, 93 66 L 31 80 Z',
-    parietal: 'M100 22 C 140 20, 172 40, 178 68 C 165 72, 150 78, 138 84 C 120 80, 104 80, 88 82 C 94 70, 98 48, 100 22 Z',
-    temporal: 'M52 104 C 62 92, 78 84, 88 82 C 105 80, 122 82, 138 84 C 135 100, 118 112, 95 113 C 78 113, 62 111, 52 104 Z',
-    // 후두엽은 그림에만 있고 누를 수 없었다. 나머지 넷과 나란히 놓아 클릭 대상으로 만든다.
-    // 키 순서가 곧 그리는 순서라 전처럼 마지막에 둔다.
-    occipital: 'M178 68 C 182 85, 175 100, 160 106 C 150 108, 142 96, 138 84 C 150 78, 165 72, 178 68 Z',
-  };
-
-  // 뇌주름. 큰 색 덩어리만 있으면 뇌가 아니라 조각난 원그래프처럼 보여서,
-  // 각 부위의 바깥 곡선과 나란히 흐르는 선을 넣는다.
-  // 부위 바깥으로 삐져나간 부분은 clipPath로 잘려 나가므로 넉넉하게 그려도 된다.
-  const GYRI = {
-    lfrontal: ['M97 32 C 70 32, 44 50, 40 74', 'M95 45 C 74 46, 56 60, 52 80',
-               'M92 57 C 78 58, 66 68, 62 84'],
-    parietal: ['M104 30 C 138 28, 164 46, 170 70', 'M104 44 C 132 42, 154 56, 160 78',
-               'M100 58 C 122 56, 142 66, 148 84'],
-    rfrontal: ['M34 82 C 48 92, 66 86, 92 72', 'M38 92 C 52 99, 70 92, 90 80'],
-    temporal: ['M56 100 C 76 92, 106 90, 136 90', 'M58 107 C 80 100, 108 98, 138 97'],
-    occipital: ['M144 78 C 158 75, 170 71, 181 70', 'M144 90 C 157 87, 168 83, 178 80'],
-  };
-  // 소뇌는 가로줄무늬가 특징
-  const CEREBELLUM_LINES = [113, 118, 123];
-
-  // 라벨을 양옆에 두면 뇌가 가로폭의 45%밖에 못 써서 휴대폰에서 너무 작다.
-  // 위/아래 네 귀퉁이로 옮기고 그 사이를 뇌가 가득 채우게 한다.
-  // 뇌 그림 자체 좌표: x 30~184, y 22~136 -> 아래 BRAIN_TF로 확대해 배치한다.
-  const VB = { w: 340, h: 330 };
-  const BRAIN_TF = 'translate(-38.4, 5.1) scale(1.948)'; // x 20~320, y 48~270에 놓임
-  // 지시선 끝점은 각 부위 안쪽 지점을 위 변환에 넣어 구한 값
-  const LABELS = {
-    lfrontal:  { x: 8,   y: 22,  anchor: 'start',  line: [46, 52, 88, 104] },
-    parietal:  { x: 332, y: 22,  anchor: 'end',    line: [294, 52, 221, 108] },
-    rfrontal:  { x: 8,   y: 298, anchor: 'start',  line: [46, 272, 82, 171] },
-    temporal:  { x: 200, y: 298, anchor: 'middle', dot: 158, line: [200, 272, 147, 194] },
-    occipital: { x: 332, y: 298, anchor: 'end',    line: [294, 272, 273, 176] },
-  };
-
-  let selected = null;
-
-  // 고르지 않은 부위도 옅게나마 제 색을 띠게 해서 네 영역이 한눈에 구분되도록 한다
-  function partFill(key, active) {
-    return key === active
-      ? `fill="${REGIONS[key].color}"`
-      : `fill="${REGIONS[key].color}" fill-opacity=".22"`;
-  }
-  // 주름 선. 고른 부위는 진한 색 위라 밝은 선, 나머지는 옅은 바탕 위라 제 색 선
-  function gyriGroup(clipId, paths, on, color) {
-    return `<g clip-path="url(#${clipId})" fill="none" stroke-width="1.2" stroke-linecap="round"
-               pointer-events="none" stroke="${on ? 'var(--card)' : color}"
-               stroke-opacity="${on ? .55 : .5}">
-      ${paths.map(d => `<path d="${d}"/>`).join('')}</g>`;
-  }
-  // 경계선은 흰색 대신 카드 배경색이라야 어두운 화면에서도 자연스럽다.
-  // 굵기는 확대 배율만큼 줄인다. 3 그대로 두면 2배로 두꺼워져 뇌가 아니라
-  // 조각난 원그래프처럼 보인다.
-  const EDGE = 'stroke="var(--card)" stroke-width="1.6"';
-
-  // uid: 한 화면에 뇌 그림이 둘 이상 있어도 clipPath id가 겹치지 않도록
-  function brainBody(base, uid, active, clickable) {
-    const clips = Object.keys(PARTS)
-      .map(k => `<clipPath id="${uid}-${k}"><path d="${PARTS[k]}"/></clipPath>`).join('')
-      + `<clipPath id="${uid}-cb"><ellipse cx="163" cy="119" rx="21" ry="11"/></clipPath>`;
-
-    const lobes = Object.keys(PARTS).map(k => {
-      const on = k === active;
-      return `<path d="${PARTS[k]}" ${clickable ? `data-region="${k}" style="cursor:pointer"` : ''}
-                    class="${on ? 'lobe-on' : ''}" ${partFill(k, active)} ${EDGE}/>
-              ${gyriGroup(`${uid}-${k}`, GYRI[k], on, REGIONS[k].color)}`;
-    }).join('');
-
-    return `
-      <defs>${clips}</defs>
-      ${lobes}
-      <ellipse cx="163" cy="119" rx="21" ry="11" fill="${base}" ${EDGE}/>
-      <g clip-path="url(#${uid}-cb)" stroke="var(--text-sub)" stroke-opacity=".38"
-         stroke-width="1.1" pointer-events="none">
-        ${CEREBELLUM_LINES.map(y => `<line x1="140" y1="${y}" x2="186" y2="${y}"/>`).join('')}
-      </g>
-      <path d="M138 112 C 136 122, 132 130, 126 136" stroke="${base}" stroke-width="8"
-            stroke-linecap="round" fill="none"/>`;
-  }
-
-  function dashboardSvg() {
-    const base = 'var(--line)';
-    const labels = Object.keys(LABELS).map(key => {
-      const L = LABELS[key], r = REGIONS[key];
-      const active = selected === key;
-      const start = L.anchor === 'start', mid = L.anchor === 'middle';
-      // 라벨 바깥쪽에 영역 색 점. 가운데 정렬은 글자 폭을 알 수 없어 위치를 직접 준다
-      const dotX = L.dot !== undefined ? L.dot : (start ? L.x + 8 : L.x - 8);
-      const textX = mid ? L.x : (start ? L.x + 22 : L.x - 22);
-      const hitX = mid ? L.x - 70 : (start ? L.x - 6 : L.x - 154); // 넓은 터치 영역
-      const hitW = mid ? 140 : 160;
-      return `
-        <line x1="${L.line[0]}" y1="${L.line[1]}" x2="${L.line[2]}" y2="${L.line[3]}"
-              stroke="${active ? r.color : 'var(--text-sub)'}" stroke-width="${active ? 3 : 1.5}"
-              stroke-linecap="round" ${active ? '' : 'stroke-dasharray="4 4"'}/>
-        <circle cx="${L.line[2]}" cy="${L.line[3]}" r="${active ? 6 : 4}"
-                fill="${active ? 'var(--card)' : r.color}"
-                stroke="${active ? 'var(--card)' : 'var(--card)'}" stroke-width="2"/>
-        <g data-region="${key}" style="cursor:pointer">
-          <rect x="${hitX}" y="${L.y - 24}" width="${hitW}" height="48" fill="transparent"/>
-          <circle cx="${dotX}" cy="${L.y - 6}" r="${active ? 8 : 6}" fill="${r.color}"
-                  fill-opacity="${active ? 1 : .45}"/>
-          <text x="${textX}" y="${L.y}" text-anchor="${L.anchor}" font-size="20" font-weight="800"
-                fill="${active ? r.color : 'var(--text)'}">${r.title}</text>
-          <text x="${textX}" y="${L.y + 20}" text-anchor="${L.anchor}" font-size="15"
-                fill="var(--text-sub)">${r.func}</text>
-        </g>`;
-    }).join('');
-    return `
-    <svg viewBox="0 0 ${VB.w} ${VB.h}" aria-label="뇌 대시보드">
-      <g transform="${BRAIN_TF}">${brainBody(base, 'dash', selected, true)}</g>
-      ${labels}
-    </svg>`;
-  }
-
-  // 영역 페이지용: 해당 부위만 강조 (전두엽은 좌/우 해당 반쪽만)
-  // viewBox를 뇌 그림 크기(x 30~184, y 22~136)에 딱 맞춰 남는 여백을 없앤다
-  function regionPageSvg(key) {
-    return `
-    <svg viewBox="24 16 166 126" aria-label="뇌 그림">
-      ${brainBody('var(--line)', 'rgn', key, false)}
-    </svg>`;
-  }
+  // 뇌 그림은 3D 점구름(Brain3D)이 그린다. 2D 단면도는 뇌처럼 보이지 않았다.
+  let selected = null;   // 지금 고른 영역
 
   function recordSummary(r) {
     const parts = r.games
@@ -1061,20 +1214,16 @@ const Region = (() => {
 
   // 홈 = 뇌 대시보드 (뇌 그림 클릭 → 색 활성화 + 아래 설명 패널)
   function renderHome() {
-    const brain = document.getElementById('home-brain');
-    if (!brain) return;
-    brain.innerHTML = dashboardSvg();
-    brain.querySelectorAll('[data-region]').forEach(el => {
-      el.addEventListener('click', () => {
-        selected = el.dataset.region;
-        renderHome();
-      });
-    });
+    const canvas = document.getElementById('home-brain-canvas');
+    if (!canvas) return;
+    Brain3D.mount(canvas, { onPick: key => { selected = key; renderHome(); } });
+    Brain3D.select(selected);
+    renderLegend();
 
     const box = document.getElementById('home-regions');
     box.innerHTML = '';
     if (!selected) {
-      box.innerHTML = `<div class="dash-hint">👆 뇌 그림의 <b>부위</b>나 <b>이름</b>을 눌러보세요</div>`;
+      box.innerHTML = `<div class="dash-hint">👆 뇌를 <b>손가락으로 돌려보고</b>, 훈련할 <b>부위</b>를 눌러보세요</div>`;
       return;
     }
     const r = REGIONS[selected];
@@ -1090,11 +1239,29 @@ const Region = (() => {
     box.appendChild(card);
   }
 
+  // 돌아가는 그림에는 지시선을 붙일 수 없다. 어느 색이 어디인지는 색 칩으로 알린다
+  function renderLegend() {
+    const box = document.getElementById('home-legend');
+    if (!box) return;
+    box.innerHTML = '';
+    Object.keys(REGIONS).forEach(key => {
+      const r = REGIONS[key];
+      const btn = document.createElement('button');
+      btn.className = 'legend-chip' + (selected === key ? ' on' : '');
+      btn.style.setProperty('--c', r.color);
+      btn.innerHTML = `<span class="legend-dot"></span>
+        <span class="legend-text"><b>${r.title}</b><small>${r.func}</small></span>`;
+      btn.onclick = () => { selected = key; renderHome(); };
+      box.appendChild(btn);
+    });
+  }
+
   // 영역 페이지 = 영역 소개 + 게임 선택
   function open(key) {
     const r = REGIONS[key];
     document.getElementById('region-title').textContent = r.title;
-    document.getElementById('region-brain').innerHTML = regionPageSvg(key);
+    Brain3D.mount(document.getElementById('region-brain-canvas'), {});
+    Brain3D.select(key);
     const badge = document.getElementById('region-badge');
     badge.textContent = `${r.title} · ${r.func}`;
     badge.style.background = r.color;
@@ -1123,7 +1290,7 @@ const Region = (() => {
     showScreen('screen-region');
   }
 
-  return { open, renderHome };
+  return { open, renderHome, REGIONS };
 })();
 
 Region.renderHome();
@@ -1840,7 +2007,7 @@ const Pixel = (() => {
   const showMs = n => 1000 + n * 300; // 많이 켜질수록 더 오래 보여준다
 
   let no = 0, score = 0, streak = 0, sid = 0;
-  let lit = [], found = 0, lock = true;
+  let lit = [], picked = [], lock = true;
 
   function cells() { return [...document.querySelectorAll('#pixel-grid .pcell')]; }
 
@@ -1863,7 +2030,7 @@ const Pixel = (() => {
   function next() {
     no++;
     if (no > TOTAL) return finish();
-    lock = true; found = 0;
+    lock = true; picked = [];
     const n = COUNT[no - 1];
 
     document.getElementById('pixel-no').textContent = no;
@@ -1881,44 +2048,67 @@ const Pixel = (() => {
     // 보여준 뒤 끄고 입력을 받는다
     gameTimeout(sid, () => {
       cs.forEach(c => c.classList.remove('lit'));
-      document.getElementById('pixel-guide').textContent = `켜졌던 ${n}칸을 짚어보세요`;
+      showProgress(n);
       cs.forEach(c => (c.disabled = false));
       lock = false;
     }, showMs(n));
   }
 
-  function tap(i, btn) {
-    if (lock || btn.classList.contains('hit')) return;
-    const n = COUNT[no - 1];
-
-    if (lit.includes(i)) {
-      btn.classList.add('hit');
-      btn.textContent = '⭕';
-      found++;
-      if (found === n) return endRound(true);
-      return;
-    }
-    btn.classList.add('miss');
-    btn.textContent = '❌';
-    endRound(false);
+  function showProgress(n) {
+    document.getElementById('pixel-guide').textContent =
+      `켜졌던 ${n}칸을 짚어보세요 (${picked.length}/${n})`;
   }
 
-  function endRound(ok) {
+  // 누르는 동안에는 맞았는지 틀렸는지 알려주지 않는다.
+  // 개수를 다 채운 뒤에 한꺼번에 채점해야 내가 고른 것과 정답을 나란히 비교할 수 있다.
+  function tap(i, btn) {
+    if (lock) return;
+    const n = COUNT[no - 1];
+    const at = picked.indexOf(i);
+
+    if (at >= 0) {            // 이미 고른 칸을 다시 누르면 취소 (잘못 눌렀을 때 되돌릴 수 있게)
+      picked.splice(at, 1);
+      btn.classList.remove('picked');
+    } else {
+      if (picked.length >= n) return;
+      picked.push(i);
+      btn.classList.add('picked');
+    }
+
+    showProgress(n);
+    if (picked.length === n) gameTimeout(sid, endRound, 250); // 마지막 칸이 눌린 게 보이도록 잠깐 둔다
+  }
+
+  function endRound() {
     lock = true;
     const cs = cells();
     cs.forEach(c => (c.disabled = true));
+
+    const hit = picked.filter(i => lit.includes(i));
+    const ok = hit.length === lit.length;
+
+    // 내가 고른 것: 맞으면 ⭕ 틀리면 ❌ / 놓친 칸: 노란색
+    cs.forEach(c => c.classList.remove('picked'));
+    picked.forEach(i => {
+      if (lit.includes(i)) { cs[i].classList.add('hit'); cs[i].textContent = '⭕'; }
+      else { cs[i].classList.add('miss'); cs[i].textContent = '❌'; }
+    });
+    lit.forEach(i => { if (!picked.includes(i)) cs[i].classList.add('reveal'); });
+
     const fb = document.getElementById('pixel-feedback');
     if (ok) {
-      score++; streak++;
+      score++;
+      streak++;
       Sound.correct(streak);
+      document.getElementById('pixel-guide').textContent = '모두 맞히셨어요!';
       fb.innerHTML = `<span class="feedback-good">⭕ 정답!${streakText(streak)}</span>`;
     } else {
       streak = 0;
-      // 못 찾은 칸을 보여줘야 다음 판에 도움이 된다
-      lit.forEach(i => { if (!cs[i].classList.contains('hit')) cs[i].classList.add('reveal'); });
-      fb.innerHTML = '<span class="feedback-bad">❌ 아쉬워요! 노란 칸이 정답이에요</span>';
+      document.getElementById('pixel-guide').textContent = '노란 칸이 놓친 곳이에요';
+      fb.innerHTML = `<span class="feedback-bad">❌ ${lit.length}칸 중 ${hit.length}칸 맞았어요</span>`;
     }
-    gameTimeout(sid, next, ok ? 800 : 1800);
+    // 틀렸을 때는 고른 것과 정답을 견줘볼 시간이 더 필요하다
+    gameTimeout(sid, next, ok ? 900 : 2600);
   }
 
   function finish() {
