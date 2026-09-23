@@ -1,0 +1,1507 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>베리굿브레인 뇌 훈련</title>
+<style>
+/* 베리굿브레인 프로토타입 - 시니어 친화 스타일 */
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+:root {
+  --blue: #2563eb;
+  --blue-dark: #1d4ed8;
+  --bg: #f4f6fb;
+  --card: #ffffff;
+  --text: #1e293b;
+  --text-sub: #64748b;
+  --line: #dbe3f0;
+  --good: #16a34a;
+  --bad: #dc2626;
+  --overlay: rgba(255, 255, 255, .95);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --text: #e2e8f0;
+    --text-sub: #94a3b8;
+    --line: #334155;
+    --overlay: rgba(15, 23, 42, .95);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f172a;
+  --card: #1e293b;
+  --text: #e2e8f0;
+  --text-sub: #94a3b8;
+  --line: #334155;
+  --overlay: rgba(15, 23, 42, .95);
+}
+
+html { font-size: 18px; overscroll-behavior-y: contain; /* 당겨서 새로고침 방지 */ }
+body {
+  font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  touch-action: manipulation;
+}
+
+.screen { display: none; padding: 16px; min-height: 100vh; }
+.screen.active { display: block; }
+.hidden { display: none !important; }
+
+/* ---------- 홈 ---------- */
+.app-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 0 20px;
+}
+.app-header h1 { font-size: 1.4rem; color: var(--blue-dark); }
+.points-badge {
+  background: #fef3c7; border: 2px solid #f59e0b; border-radius: 999px;
+  padding: 6px 14px; font-weight: bold; font-size: 1.05rem;
+}
+.section-title { font-size: 1.25rem; margin-bottom: 14px; }
+
+.mission-list { display: flex; flex-direction: column; gap: 14px; }
+.mission-card {
+  background: var(--card); border: 2px solid var(--line); border-radius: 16px;
+  padding: 18px; text-align: left; cursor: pointer; width: 100%;
+  box-shadow: 0 2px 6px rgba(30,41,59,.06);
+}
+.mission-card:active { transform: scale(.98); border-color: var(--blue); }
+.mission-label { font-size: .9rem; color: var(--blue); font-weight: bold; margin-bottom: 6px; }
+.chip { background: #eff6ff; border-radius: 999px; padding: 2px 10px; margin-left: 6px; }
+.mission-name { font-size: 1.3rem; font-weight: bold; margin-bottom: 4px; }
+.mission-desc { font-size: 1rem; color: var(--text-sub); }
+.footnote { margin-top: 24px; font-size: .85rem; color: var(--text-sub); text-align: center; }
+
+/* ---------- 게임 공용 ---------- */
+.game-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 10px;
+}
+.btn-back {
+  background: none; border: none; font-size: 1.05rem; color: var(--text-sub);
+  cursor: pointer; padding: 8px;
+}
+.game-title { font-size: 1.2rem; font-weight: bold; }
+.game-stat { font-size: 1.1rem; font-weight: bold; color: var(--blue); min-width: 60px; text-align: right; }
+.game-guide { text-align: center; color: var(--text-sub); margin-bottom: 14px; font-size: 1.05rem; }
+.game-substat { text-align: center; color: var(--text-sub); margin-top: 14px; }
+
+.btn-primary {
+  display: block; width: 100%; background: var(--blue); color: #fff;
+  border: none; border-radius: 14px; padding: 18px; font-size: 1.25rem;
+  font-weight: bold; cursor: pointer; margin-top: 16px;
+}
+.btn-primary:active { background: var(--blue-dark); }
+.btn-secondary {
+  display: block; width: 100%; background: #fff; color: var(--blue);
+  border: 2px solid var(--blue); border-radius: 14px; padding: 16px;
+  font-size: 1.15rem; font-weight: bold; cursor: pointer; margin-top: 12px;
+}
+
+/* ---------- 카드 뒤집기 ---------- */
+.memory-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+}
+.mcard {
+  aspect-ratio: 3/4; border-radius: 14px; cursor: pointer;
+  perspective: 600px; border: none; background: none; padding: 0;
+}
+.mcard-inner {
+  width: 100%; height: 100%; position: relative;
+  transform-style: preserve-3d; transition: transform .4s;
+}
+.mcard.flipped .mcard-inner { transform: rotateY(180deg); }
+.mcard-face {
+  position: absolute; inset: 0; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  backface-visibility: hidden; font-size: 3rem;
+}
+.mcard-back {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: #fff; font-size: 2rem;
+}
+.mcard-front {
+  background: #fff; border: 3px solid #dbe3f0; transform: rotateY(180deg);
+}
+.mcard.matched .mcard-front { border-color: var(--good); background: #f0fdf4; }
+
+/* ---------- 청기백기 ---------- */
+.level-banner {
+  text-align: center; font-size: 1rem; font-weight: bold; color: #fff;
+  background: var(--blue); border-radius: 999px; padding: 6px 0;
+  width: 120px; margin: 0 auto 10px;
+}
+.flag-command {
+  text-align: center; font-size: 1.85rem; font-weight: 800;
+  min-height: 100px; display: flex; align-items: center; justify-content: center;
+  flex-wrap: wrap; column-gap: 8px; row-gap: 10px;
+  background: var(--card); border-radius: 16px; padding: 14px;
+  border: 2px solid var(--line); line-height: 1.3;
+}
+.cmd-flag {
+  display: inline-block; padding: 2px 14px; border-radius: 12px;
+}
+.cmd-blue { background: #2563eb; color: #fff; }
+.cmd-white { background: #fff; color: #334155; border: 3px solid #94a3b8; }
+.cmd-act { white-space: nowrap; }
+.cmd-up { color: #15803d; }
+.cmd-down { color: #c2410c; }
+.cmd-stop { color: var(--text-sub); }
+.timer-row {
+  display: flex; align-items: center; gap: 10px; margin: 12px 0 8px;
+}
+.timer-label {
+  font-size: 1rem; font-weight: bold; color: var(--text-sub); white-space: nowrap;
+}
+.timer-num {
+  font-size: 1.35rem; font-weight: 800; color: #b45309;
+  min-width: 58px; text-align: right; white-space: nowrap;
+}
+.timer-num.low { color: var(--bad); }
+.timer-track {
+  flex: 1; height: 24px; background: #e2e8f0; border-radius: 999px;
+  overflow: hidden;
+}
+.timer-bar {
+  height: 100%; width: 100%; background: #f59e0b; border-radius: 999px;
+}
+.timer-bar.running { transition: width linear; }
+.timer-bar.low { background: var(--bad); }
+
+.flag-arena {
+  display: flex; gap: 14px; margin-top: 8px;
+}
+.flag-zone {
+  flex: 1; height: 380px; background: #fff; border: 2px dashed #cbd5e1;
+  border-radius: 16px; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; touch-action: none; user-select: none;
+  -webkit-user-select: none; -webkit-touch-callout: none; /* iOS 길게 누르기 방지 */
+}
+.zone-hint {
+  position: absolute; bottom: 10px; font-size: .85rem; color: var(--text-sub);
+}
+.flag-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  transition: transform .25s ease; pointer-events: none;
+}
+.flag-svg {
+  width: 140px; height: auto;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,.18));
+}
+
+.flag-wrap.pos-up { transform: translateY(-70px); }
+.flag-wrap.pos-down { transform: translateY(70px); }
+
+.flag-feedback {
+  position: fixed; inset: 0; background: rgba(255,255,255,.95);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 50; max-width: 480px; margin: 0 auto;
+}
+.feedback-mark { font-size: 6rem; }
+.feedback-text { font-size: 2rem; font-weight: 800; margin: 10px 0; }
+.feedback-answer { font-size: 1.3rem; color: var(--text-sub); text-align: center; line-height: 1.6; }
+.feedback-good { color: var(--good); }
+.feedback-bad { color: var(--bad); }
+
+/* ---------- 언어 퀴즈 ---------- */
+.quiz-passage {
+  background: #fff; border: 2px solid var(--line); border-radius: 16px;
+  padding: 18px; font-size: 1.15rem; line-height: 1.7; margin-bottom: 14px;
+}
+.quiz-question { font-size: 1.2rem; font-weight: bold; margin-bottom: 14px; line-height: 1.5; }
+.quiz-choices { display: flex; flex-direction: column; gap: 10px; }
+.quiz-choice {
+  background: #fff; border: 2px solid var(--line); border-radius: 14px;
+  padding: 16px; font-size: 1.15rem; text-align: left; cursor: pointer;
+  line-height: 1.4;
+}
+.quiz-choice:active { border-color: var(--blue); }
+.quiz-choice.correct { border-color: var(--good); background: #f0fdf4; font-weight: bold; }
+.quiz-choice.wrong { border-color: var(--bad); background: #fef2f2; }
+.quiz-choice:disabled { cursor: default; }
+.quiz-feedback {
+  margin-top: 14px; font-size: 1.2rem; font-weight: bold; text-align: center;
+}
+
+/* ---------- 결과 ---------- */
+.result-box {
+  background: #fff; border-radius: 20px; padding: 30px 22px; text-align: center;
+  margin-top: 40px; box-shadow: 0 4px 14px rgba(30,41,59,.08);
+}
+.result-emoji { font-size: 4rem; }
+.result-box h2 { font-size: 1.5rem; margin: 10px 0; }
+.result-score { font-size: 1.3rem; margin-bottom: 16px; }
+.result-score strong { color: var(--blue); font-size: 1.8rem; }
+.result-detail {
+  text-align: left; font-size: 1.05rem; line-height: 1.7; color: var(--text-sub);
+  background: var(--bg); border-radius: 12px; padding: 14px; margin-bottom: 8px;
+  max-height: 300px; overflow-y: auto;
+}
+.result-detail .rd-good { color: var(--good); }
+.result-detail .rd-bad { color: var(--bad); }
+.result-best {
+  display: inline-block; background: #fef3c7; color: #92400e;
+  border: 2px solid #f59e0b; border-radius: 999px;
+  padding: 6px 16px; font-weight: 800; margin-bottom: 10px;
+}
+
+/* ---------- 4대 영역 홈 ---------- */
+.region {
+  display: inline-block; color: #fff; border-radius: 999px;
+  padding: 2px 10px; font-size: .85rem; margin-right: 4px;
+}
+.region-parietal { background: #9333ea; }
+.region-temporal { background: #ea580c; }
+.region-rfrontal { background: #0891b2; }
+.region-lfrontal { background: #16a34a; }
+.mission-best { font-size: .9rem; color: var(--text-sub); margin-top: 6px; }
+.sub-title { margin-top: 26px; font-size: 1.05rem; color: var(--text-sub); }
+.mission-sub { padding: 14px 18px; }
+.mission-tag {
+  font-size: .85rem; color: var(--blue); background: #eff6ff;
+  border-radius: 999px; padding: 2px 10px; margin-left: 6px; vertical-align: middle;
+}
+
+/* ---------- 뇌 영역 소개 페이지 ---------- */
+.region-brain {
+  background: var(--card); border: 2px solid var(--line); border-radius: 20px;
+  padding: 18px 24px; margin-bottom: 14px;
+}
+.region-info { margin-bottom: 16px; }
+.region-badge {
+  display: inline-block; color: #fff; border-radius: 999px;
+  padding: 5px 16px; font-weight: 800; font-size: 1.05rem; margin-bottom: 10px;
+}
+.region-desc { font-size: 1.1rem; line-height: 1.65; color: var(--text); }
+.region-game-card {
+  display: block; width: 100%; background: var(--card);
+  border: 3px solid var(--line); border-radius: 18px; padding: 18px;
+  text-align: left; cursor: pointer;
+}
+.region-game-card:active { transform: scale(.98); }
+.region-game-top { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+.region-game-icon { font-size: 2.6rem; }
+.region-game-name { font-size: 1.35rem; font-weight: 800; }
+.region-game-how { font-size: .98rem; color: var(--text-sub); margin-top: 2px; }
+.region-game-start {
+  margin-top: 12px; background: var(--blue); color: #fff; text-align: center;
+  border-radius: 12px; padding: 14px; font-size: 1.2rem; font-weight: 800;
+}
+.region-games-title { margin: 18px 0 12px; font-size: 1.15rem; }
+.card-arrow { float: right; color: var(--blue); font-weight: bold; }
+.dash-hint {
+  text-align: center; font-size: 1.15rem; color: var(--text-sub);
+  padding: 22px 10px; background: var(--card); border: 2px dashed var(--line);
+  border-radius: 16px;
+}
+.dash-info { border-width: 3px; }
+
+/* ---------- 모양 맞추기 ---------- */
+.shape-target {
+  display: flex; justify-content: center; padding: 10px;
+  background: var(--card); border: 2px solid var(--line); border-radius: 16px;
+  margin-bottom: 16px;
+}
+.shape-choices {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+  max-width: 320px; margin: 0 auto;
+}
+.shape-choice {
+  background: var(--card);
+  border: 3px solid var(--line); border-radius: 16px; padding: 8px;
+  cursor: pointer; display: flex; justify-content: center;
+}
+.shape-choice:active { border-color: var(--blue); }
+.shape-choice.choice-good { border-color: var(--good); background: #f0fdf4; }
+.shape-choice.choice-bad { border-color: var(--bad); background: #fef2f2; }
+.inline-feedback {
+  text-align: center; font-size: 1.3rem; font-weight: 800;
+  min-height: 46px; margin-top: 14px;
+}
+
+/* ---------- 같은 그림 판별 / 색깔 글자 ---------- */
+.speed-card {
+  font-size: 7rem; text-align: center; padding: 30px 0;
+  background: var(--card); border: 2px solid var(--line); border-radius: 20px;
+  margin-bottom: 16px; user-select: none;
+}
+.stroop-word {
+  font-size: 4.5rem; font-weight: 900; text-align: center; padding: 50px 0;
+  background: var(--card); border: 2px solid var(--line); border-radius: 20px;
+  margin-bottom: 16px; user-select: none;
+}
+.speed-buttons { display: flex; gap: 12px; }
+.btn-big {
+  flex: 1; border: none; border-radius: 16px; padding: 22px 0;
+  font-size: 1.4rem; font-weight: 800; cursor: pointer; color: #fff;
+}
+.btn-big:disabled { opacity: .4; cursor: default; }
+.btn-same { background: var(--good); }
+.btn-diff { background: var(--bad); }
+.btn-big:active:not(:disabled) { transform: scale(.97); }
+
+</style>
+</head>
+<body>
+
+<!-- ===== 홈 화면 ===== -->
+<section id="screen-home" class="screen active">
+  <header class="app-header">
+    <h1>베리굿브레인</h1>
+    <div class="points-badge">🏅 <span id="total-points">0</span> P</div>
+  </header>
+
+  <h2 class="section-title">나의 뇌 대시보드</h2>
+
+  <div id="home-brain" class="region-brain"></div>
+  <div id="home-regions" class="mission-list"></div>
+
+  <p class="footnote">※ 프로토타입: 점수는 이 기기에만 저장됩니다</p>
+</section>
+
+<!-- ===== 뇌 영역 소개 페이지 (공용) ===== -->
+<section id="screen-region" class="screen">
+  <header class="game-header">
+    <button class="btn-back" onclick="goHome()">← 홈으로</button>
+    <div class="game-title" id="region-title">두정엽</div>
+    <div class="game-stat"></div>
+  </header>
+
+  <div id="region-brain" class="region-brain"></div>
+
+  <div class="region-info">
+    <div id="region-badge" class="region-badge">두정엽 · 공간 지각</div>
+    <p id="region-desc" class="region-desc"></p>
+  </div>
+
+  <h3 class="region-games-title">게임을 골라보세요</h3>
+  <div id="region-games" class="mission-list"></div>
+</section>
+
+<!-- ===== 두정엽: 모양 맞추기 ===== -->
+<section id="screen-shape" class="screen">
+  <header class="game-header">
+    <button class="btn-back" onclick="goHome()">← 나가기</button>
+    <div class="game-title">모양 맞추기</div>
+    <div class="game-stat"><span id="shape-no">1</span>/8</div>
+  </header>
+  <p class="game-guide">위의 모양을 <b>빙글 돌리면</b> 아래 중 어떤 것이 될까요?</p>
+  <div id="shape-target" class="shape-target"></div>
+  <div id="shape-choices" class="shape-choices"></div>
+  <div id="shape-feedback" class="inline-feedback"></div>
+</section>
+
+<!-- ===== 측두엽: 같은 그림 판별 ===== -->
+<section id="screen-speed" class="screen">
+  <header class="game-header">
+    <button class="btn-back" onclick="Speed.quit()">← 나가기</button>
+    <div class="game-title">같은 그림 판별</div>
+    <div class="game-stat"><span id="speed-no">0</span>/10</div>
+  </header>
+  <p class="game-guide" id="speed-guide">그림을 잘 기억하세요!</p>
+  <div id="speed-card" class="speed-card">🍎</div>
+  <div class="speed-buttons">
+    <button id="speed-same" class="btn-big btn-same" onclick="Speed.answer(true)">같다 ⭕</button>
+    <button id="speed-diff" class="btn-big btn-diff" onclick="Speed.answer(false)">다르다 ❌</button>
+  </div>
+  <button id="speed-begin" class="btn-primary" onclick="Speed.begin()">기억했어요, 시작!</button>
+  <div id="speed-feedback" class="inline-feedback"></div>
+</section>
+
+<!-- ===== 좌측 전두엽: 색깔 글자 ===== -->
+<section id="screen-stroop" class="screen">
+  <header class="game-header">
+    <button class="btn-back" onclick="goHome()">← 나가기</button>
+    <div class="game-title">색깔 글자</div>
+    <div class="game-stat"><span id="stroop-no">1</span>/10</div>
+  </header>
+  <p class="game-guide">글자의 <b>뜻</b>과 <b>칠해진 색깔</b>이 같은가요?</p>
+  <div id="stroop-word" class="stroop-word">빨강</div>
+  <div class="speed-buttons">
+    <button class="btn-big btn-same" onclick="Stroop.answer(true)">같다 ⭕</button>
+    <button class="btn-big btn-diff" onclick="Stroop.answer(false)">다르다 ❌</button>
+  </div>
+  <div id="stroop-feedback" class="inline-feedback"></div>
+</section>
+
+<!-- ===== 카드 뒤집기 ===== -->
+<section id="screen-memory" class="screen">
+  <header class="game-header">
+    <button class="btn-back" onclick="goHome()">← 나가기</button>
+    <div class="game-title">카드 뒤집기</div>
+    <div class="game-stat"><span id="memory-score">0</span>쌍</div>
+  </header>
+  <p class="game-guide">같은 동물 카드 두 장을 찾아 짝을 맞추세요!</p>
+  <div id="memory-grid" class="memory-grid"></div>
+  <p class="game-substat">뒤집은 횟수: <span id="memory-tries">0</span>회</p>
+</section>
+
+<!-- ===== 청기백기 ===== -->
+<section id="screen-flag" class="screen">
+  <header class="game-header">
+    <button class="btn-back" onclick="Flag.quit()">← 나가기</button>
+    <div class="game-title">청기백기</div>
+    <div class="game-stat"><span id="flag-round">1</span>/9</div>
+  </header>
+
+  <div id="flag-level-banner" class="level-banner">1단계</div>
+  <div id="flag-command" class="flag-command">준비...</div>
+  <div class="timer-row">
+    <span class="timer-label">⏱ 남은 시간</span>
+    <div class="timer-track"><div id="flag-timer" class="timer-bar"></div></div>
+    <span id="flag-timer-num" class="timer-num">8초</span>
+  </div>
+
+  <div class="flag-arena">
+    <div class="flag-zone" id="zone-blue">
+      <div class="flag-wrap" id="flag-blue">
+        <svg class="flag-svg" viewBox="0 0 150 235" aria-label="청기">
+          <circle cx="17" cy="13" r="9" fill="#fbbf24" stroke="#d97706" stroke-width="2"/>
+          <rect x="12" y="20" width="10" height="210" rx="5" fill="#a16207"/>
+          <rect x="14" y="20" width="3" height="210" rx="1.5" fill="#d4a437"/>
+          <path d="M22 30 C 55 18, 92 40, 138 27
+                   C 133 52, 143 78, 138 103
+                   C 98 116, 60 94, 22 106 Z"
+                fill="#2563eb" stroke="#1d4ed8" stroke-width="2"/>
+          <text x="80" y="76" text-anchor="middle" font-size="30" font-weight="800"
+                fill="#ffffff">청기</text>
+        </svg>
+      </div>
+      <div class="zone-hint">↕ 위아래로 쓸기</div>
+    </div>
+    <div class="flag-zone" id="zone-white">
+      <div class="flag-wrap" id="flag-white">
+        <svg class="flag-svg" viewBox="0 0 150 235" aria-label="백기">
+          <circle cx="17" cy="13" r="9" fill="#fbbf24" stroke="#d97706" stroke-width="2"/>
+          <rect x="12" y="20" width="10" height="210" rx="5" fill="#a16207"/>
+          <rect x="14" y="20" width="3" height="210" rx="1.5" fill="#d4a437"/>
+          <path d="M22 30 C 55 18, 92 40, 138 27
+                   C 133 52, 143 78, 138 103
+                   C 98 116, 60 94, 22 106 Z"
+                fill="#ffffff" stroke="#94a3b8" stroke-width="3"/>
+          <text x="80" y="76" text-anchor="middle" font-size="30" font-weight="800"
+                fill="#334155">백기</text>
+        </svg>
+      </div>
+      <div class="zone-hint">↕ 위아래로 쓸기</div>
+    </div>
+  </div>
+
+  <div id="flag-feedback" class="flag-feedback hidden">
+    <div id="flag-feedback-mark" class="feedback-mark">⭕</div>
+    <div id="flag-feedback-text" class="feedback-text">정답!</div>
+    <div id="flag-feedback-answer" class="feedback-answer"></div>
+  </div>
+</section>
+
+<!-- ===== 언어 퀴즈 ===== -->
+<section id="screen-quiz" class="screen">
+  <header class="game-header">
+    <button class="btn-back" onclick="goHome()">← 나가기</button>
+    <div class="game-title">문맥 퀴즈</div>
+    <div class="game-stat"><span id="quiz-no">1</span>/5</div>
+  </header>
+  <div id="quiz-passage" class="quiz-passage"></div>
+  <div id="quiz-question" class="quiz-question"></div>
+  <div id="quiz-choices" class="quiz-choices"></div>
+  <div id="quiz-feedback" class="quiz-feedback hidden"></div>
+  <button id="quiz-next" class="btn-primary hidden" onclick="Quiz.next()">다음 문제 →</button>
+</section>
+
+<!-- ===== 결과 화면 (공용) ===== -->
+<section id="screen-result" class="screen">
+  <div class="result-box">
+    <div class="result-emoji" id="result-emoji">🎉</div>
+    <h2 id="result-title">참 잘하셨어요!</h2>
+    <div id="result-best" class="result-best hidden">🏆 최고 기록 갱신!</div>
+    <div class="result-score">획득 점수 <strong id="result-score">0</strong>점</div>
+    <div id="result-detail" class="result-detail"></div>
+    <button class="btn-primary" onclick="goHome()">홈으로</button>
+    <button class="btn-secondary" id="result-retry">다시 하기</button>
+  </div>
+</section>
+
+<script>
+// 공용: 화면 전환 + 포인트/최고기록 저장 + 결과 화면
+const POINTS_KEY = 'vgb_points';
+
+function getPoints() {
+  try { return parseInt(localStorage.getItem(POINTS_KEY)) || 0; } catch { return 0; }
+}
+function addPoints(n) {
+  try { localStorage.setItem(POINTS_KEY, getPoints() + n); } catch {}
+  renderPoints();
+}
+function renderPoints() {
+  document.getElementById('total-points').textContent = getPoints();
+}
+
+// 게임별 최고 기록
+function getBest(key) {
+  try { const v = localStorage.getItem('vgb_best_' + key); return v === null ? null : parseInt(v); }
+  catch { return null; }
+}
+function updateBest(key, score) {
+  const prev = getBest(key);
+  const isNew = prev === null ? score > 0 : score > prev;
+  if (isNew) { try { localStorage.setItem('vgb_best_' + key, score); } catch {} }
+  return isNew;
+}
+function renderBests() {
+  document.querySelectorAll('[data-best]').forEach(el => {
+    const b = getBest(el.dataset.best);
+    el.textContent = b === null ? '-' : b + '점';
+  });
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function goHome() {
+  showScreen('screen-home');
+  renderPoints();
+  renderBests();
+  if (typeof Region !== 'undefined') Region.renderHome(); // 대시보드 기록 갱신
+}
+
+// 연속 정답(콤보) 문구: 2연속부터 표시
+function streakText(streak) {
+  return streak >= 2 ? ` 🔥 ${streak}연속!` : '';
+}
+
+// 결과 화면 공용
+function showResult({ score, max, detailHtml, retryFn, gameKey }) {
+  const ratio = score / max;
+  const isNewBest = gameKey ? updateBest(gameKey, score) : false;
+  document.getElementById('result-emoji').textContent =
+    isNewBest ? '🏆' : ratio >= 0.8 ? '🎉' : ratio >= 0.5 ? '😊' : '💪';
+  document.getElementById('result-title').textContent =
+    ratio >= 0.8 ? '참 잘하셨어요!' : ratio >= 0.5 ? '좋아요, 잘하고 있어요!' : '다음엔 더 잘할 수 있어요!';
+  document.getElementById('result-best').classList.toggle('hidden', !isNewBest);
+  document.getElementById('result-score').textContent = `${score} / ${max}`;
+  document.getElementById('result-detail').innerHTML = detailHtml || '';
+  document.getElementById('result-retry').onclick = retryFn;
+  addPoints(score);
+  showScreen('screen-result');
+}
+
+renderPoints();
+renderBests();
+
+</script>
+<script>
+// 뇌 대시보드(홈: 클릭형 뇌 그림 + 4방면 라벨) + 영역별 페이지(게임 선택)
+const Region = (() => {
+  const REGIONS = {
+    parietal: {
+      title: '두정엽', func: '공간 지각', color: '#9333ea', cls: 'region-parietal',
+      short: '공간을 파악하고 모양을 머릿속으로 그려보는 힘',
+      desc: '머리 윗부분에 있는 두정엽은 공간을 파악하고, 사물의 위치와 모양을 머릿속으로 그려보는 일을 해요. 길 찾기, 퍼즐 맞추기가 이 영역의 힘입니다.',
+      games: [
+        { icon: '🧩', name: '모양 맞추기', how: '모양을 머릿속으로 돌려서 같은 것을 고르세요', best: 'shape', start: () => Shape.start() },
+      ],
+    },
+    temporal: {
+      title: '측두엽', func: '기억·패턴', color: '#ea580c', cls: 'region-temporal',
+      short: '보고 들은 것을 기억하고 패턴을 알아차리는 힘',
+      desc: '귀 옆쪽에 있는 측두엽은 보고 들은 것을 기억하고, 방금 본 패턴을 빠르게 알아차리는 일을 해요. 사람 얼굴과 소리를 기억하는 힘입니다.',
+      games: [
+        { icon: '⚡', name: '같은 그림 판별', how: '직전 그림과 같은지 빠르게 ⭕/❌ 판단하세요', best: 'speed', start: () => Speed.start() },
+        { icon: '🧠', name: '카드 뒤집기', how: '같은 동물 카드 두 장의 짝을 찾으세요', best: 'memory', start: () => Memory.start() },
+      ],
+    },
+    rfrontal: {
+      title: '우측 전두엽', func: '맥락·어휘', color: '#0891b2', cls: 'region-rfrontal',
+      short: '말과 글의 분위기, 상황의 맥락을 읽는 힘',
+      desc: '이마 오른쪽의 전두엽은 말과 글의 분위기, 상황의 맥락을 파악하는 일을 해요. 대화의 흐름을 읽고 알맞은 말을 고르는 힘입니다.',
+      games: [
+        { icon: '📖', name: '문맥 퀴즈', how: '글의 흐름에 맞는 답을 골라보세요', best: 'quiz', start: () => Quiz.start() },
+      ],
+    },
+    lfrontal: {
+      title: '좌측 전두엽', func: '규칙 제어', color: '#16a34a', cls: 'region-lfrontal',
+      short: '규칙을 지키고 헷갈리는 습관을 억누르는 힘',
+      desc: '이마 왼쪽의 전두엽은 규칙을 지키고, 헷갈리는 습관을 억누르는 일을 해요. 충동을 참고 논리적으로 판단하는 힘입니다.',
+      games: [
+        { icon: '🎨', name: '색깔 글자', how: '글자의 뜻과 칠해진 색깔이 같은지 판단하세요', best: 'stroop', start: () => Stroop.start() },
+        { icon: '🚩', name: '청기백기', how: '지시를 듣고 맞는 깃발만 올리고 내리세요', best: 'flag', start: () => Flag.start() },
+      ],
+    },
+  };
+
+  // 뇌 부위 경로 (옆모습, 왼쪽이 앞) - 전두엽은 좌/우 클릭을 위해 위/아래로 분할
+  const PARTS = {
+    lfrontal: 'M100 22 C 60 20, 30 45, 30 75 L 31 80 L 93 66 C 96 51, 98 37, 100 22 Z',
+    rfrontal: 'M31 80 C 33 92, 41 100, 52 104 C 62 92, 78 84, 88 82 C 90 77, 92 71, 93 66 L 31 80 Z',
+    parietal: 'M100 22 C 140 20, 172 40, 178 68 C 165 72, 150 78, 138 84 C 120 80, 104 80, 88 82 C 94 70, 98 48, 100 22 Z',
+    temporal: 'M52 104 C 62 92, 78 84, 88 82 C 105 80, 122 82, 138 84 C 135 100, 118 112, 95 113 C 78 113, 62 111, 52 104 Z',
+  };
+  const OCCIPITAL = 'M178 68 C 182 85, 175 100, 160 106 C 150 108, 142 96, 138 84 C 150 78, 165 72, 178 68 Z';
+
+  // 4방면 라벨 위치 (viewBox 0 0 340 235, 뇌는 translate(60,42))
+  const LABELS = {
+    lfrontal: { x: 8,   y: 30,  anchor: 'start', line: [76, 40, 112, 74] },
+    rfrontal: { x: 8,   y: 188, anchor: 'start', line: [76, 196, 105, 148] },
+    parietal: { x: 332, y: 30,  anchor: 'end',   line: [264, 40, 212, 76] },
+    temporal: { x: 332, y: 188, anchor: 'end',   line: [264, 196, 178, 152] },
+  };
+
+  let selected = null;
+
+  function dashboardSvg() {
+    const base = 'var(--line)';
+    const parts = Object.keys(PARTS).map(key => {
+      const active = selected === key;
+      return `<path d="${PARTS[key]}" data-region="${key}" style="cursor:pointer"
+        fill="${active ? REGIONS[key].color : base}" stroke="#fff" stroke-width="3"/>`;
+    }).join('');
+    const labels = Object.keys(LABELS).map(key => {
+      const L = LABELS[key], r = REGIONS[key];
+      const active = selected === key;
+      return `
+        <line x1="${L.line[0]}" y1="${L.line[1]}" x2="${L.line[2]}" y2="${L.line[3]}"
+              stroke="${active ? r.color : 'var(--text-sub)'}" stroke-width="${active ? 2.5 : 1.5}"/>
+        <g data-region="${key}" style="cursor:pointer">
+          <text x="${L.x}" y="${L.y}" text-anchor="${L.anchor}" font-size="16" font-weight="800"
+                fill="${active ? r.color : 'var(--text)'}">${r.title}</text>
+          <text x="${L.x}" y="${L.y + 18}" text-anchor="${L.anchor}" font-size="12"
+                fill="var(--text-sub)">${r.func}</text>
+        </g>`;
+    }).join('');
+    return `
+    <svg viewBox="0 0 340 235" width="100%" height="auto" aria-label="뇌 대시보드">
+      <g transform="translate(60,42)">
+        ${parts}
+        <path d="${OCCIPITAL}" fill="${base}" stroke="#fff" stroke-width="3"/>
+        <ellipse cx="163" cy="119" rx="21" ry="11" fill="${base}" stroke="#fff" stroke-width="3"/>
+        <path d="M138 112 C 136 122, 132 130, 126 136" stroke="${base}" stroke-width="8"
+              stroke-linecap="round" fill="none"/>
+      </g>
+      ${labels}
+    </svg>`;
+  }
+
+  // 영역 페이지용: 해당 부위만 강조 (전두엽은 좌/우 해당 반쪽만)
+  function regionPageSvg(key) {
+    const base = 'var(--line)';
+    const parts = Object.keys(PARTS).map(k =>
+      `<path d="${PARTS[k]}" fill="${k === key ? REGIONS[key].color : base}" stroke="#fff" stroke-width="3"/>`
+    ).join('');
+    return `
+    <svg viewBox="0 0 220 150" width="100%" height="auto" aria-label="뇌 그림">
+      ${parts}
+      <path d="${OCCIPITAL}" fill="${base}" stroke="#fff" stroke-width="3"/>
+      <ellipse cx="163" cy="119" rx="21" ry="11" fill="${base}" stroke="#fff" stroke-width="3"/>
+      <path d="M138 112 C 136 122, 132 130, 126 136" stroke="${base}" stroke-width="8"
+            stroke-linecap="round" fill="none"/>
+    </svg>`;
+  }
+
+  function recordSummary(r) {
+    const parts = r.games
+      .map(g => ({ g, b: getBest(g.best) }))
+      .filter(x => x.b !== null)
+      .map(x => `${x.g.name} ${x.b}점`);
+    return parts.length ? '📊 ' + parts.join(' · ') : '아직 기록이 없어요';
+  }
+
+  // 홈 = 뇌 대시보드 (뇌 그림 클릭 → 색 활성화 + 아래 설명 패널)
+  function renderHome() {
+    const brain = document.getElementById('home-brain');
+    if (!brain) return;
+    brain.innerHTML = dashboardSvg();
+    brain.querySelectorAll('[data-region]').forEach(el => {
+      el.addEventListener('click', () => {
+        selected = el.dataset.region;
+        renderHome();
+      });
+    });
+
+    const box = document.getElementById('home-regions');
+    box.innerHTML = '';
+    if (!selected) {
+      box.innerHTML = `<div class="dash-hint">👆 뇌 그림의 <b>부위</b>나 <b>이름</b>을 눌러보세요</div>`;
+      return;
+    }
+    const r = REGIONS[selected];
+    const card = document.createElement('button');
+    card.className = 'mission-card dash-info';
+    card.style.borderColor = r.color;
+    card.innerHTML = `
+      <div class="mission-label"><span class="region ${r.cls}">${r.title}</span> ${r.func}</div>
+      <div class="mission-desc">${r.short}</div>
+      <div class="mission-best">${recordSummary(r)}</div>
+      <div class="region-game-start" style="background:${r.color}">게임 보러가기 (${r.games.length}개) ▶</div>`;
+    card.onclick = () => open(selected);
+    box.appendChild(card);
+  }
+
+  // 영역 페이지 = 영역 소개 + 게임 선택
+  function open(key) {
+    const r = REGIONS[key];
+    document.getElementById('region-title').textContent = r.title;
+    document.getElementById('region-brain').innerHTML = regionPageSvg(key);
+    const badge = document.getElementById('region-badge');
+    badge.textContent = `${r.title} · ${r.func}`;
+    badge.style.background = r.color;
+    document.getElementById('region-desc').textContent = r.desc;
+
+    const box = document.getElementById('region-games');
+    box.innerHTML = '';
+    r.games.forEach(g => {
+      const b = getBest(g.best);
+      const btn = document.createElement('button');
+      btn.className = 'region-game-card';
+      btn.style.borderColor = r.color;
+      btn.innerHTML = `
+        <div class="region-game-top">
+          <span class="region-game-icon">${g.icon}</span>
+          <div>
+            <div class="region-game-name">${g.name}</div>
+            <div class="region-game-how">${g.how}</div>
+          </div>
+        </div>
+        <div class="mission-best">최고 기록: ${b === null ? '-' : b + '점'}</div>
+        <div class="region-game-start">게임 시작하기 ▶</div>`;
+      btn.onclick = g.start;
+      box.appendChild(btn);
+    });
+    showScreen('screen-region');
+  }
+
+  return { open, renderHome };
+})();
+
+Region.renderHome();
+
+</script>
+<script>
+// 두정엽: 모양 맞추기 - 목표 모양을 회전시킨 것을 보기에서 고르기
+const Shape = (() => {
+  const TOTAL = 8;
+  const EASY_ROUNDS = 3; // 1~3라운드 쉬움, 4~8라운드 거울상 함정
+  // 폴리오미노 (회전해도 서로 다른 모양들)
+  const SHAPES = {
+    L: [[0,0],[0,1],[0,2],[1,2]],
+    T: [[0,0],[1,0],[2,0],[1,1]],
+    S: [[1,0],[2,0],[0,1],[1,1]],
+    I: [[0,0],[0,1],[0,2],[0,3]],
+    P: [[0,0],[1,0],[0,1],[1,1],[0,2]],
+    F: [[1,0],[2,0],[0,1],[1,1],[1,2]],
+    Y: [[1,0],[0,1],[1,1],[1,2],[1,3]],
+  };
+  // 거울상이 어떤 회전과도 겹치지 않는(비대칭) 모양 - 어려운 라운드용
+  const CHIRAL = ['L', 'S', 'P', 'F', 'Y'];
+  const COLORS = ['#2563eb', '#16a34a', '#ea580c', '#9333ea'];
+
+  // 좌우 반전(거울상)
+  function mirror(cells) {
+    const mx = Math.max(...cells.map(c => c[0]));
+    return cells.map(([x, y]) => [mx - x, y]);
+  }
+
+  let no = 0, score = 0, streak = 0, lock = false;
+  const rand = arr => arr[Math.floor(Math.random() * arr.length)];
+
+  // 폴리오미노를 SVG로 그리기 (중앙 정렬 + 회전)
+  function shapeSvg(cells, color, rotation, size) {
+    const cs = 26; // 셀 크기
+    const xs = cells.map(c => c[0]), ys = cells.map(c => c[1]);
+    const w = (Math.max(...xs) + 1) * cs, h = (Math.max(...ys) + 1) * cs;
+    const cx = 60, cy = 60;
+    const ox = cx - w / 2, oy = cy - h / 2;
+    const rects = cells.map(([x, y]) =>
+      `<rect x="${ox + x * cs}" y="${oy + y * cs}" width="${cs - 2}" height="${cs - 2}" rx="4" fill="${color}"/>`
+    ).join('');
+    return `<svg viewBox="0 0 120 120" width="${size}" height="${size}">
+      <g transform="rotate(${rotation}, ${cx}, ${cy})">${rects}</g></svg>`;
+  }
+
+  function start() {
+    no = 0; score = 0; streak = 0;
+    showScreen('screen-shape');
+    next();
+  }
+
+  function next() {
+    no++;
+    if (no > TOTAL) return finish();
+    lock = false;
+    document.getElementById('shape-no').textContent = no;
+    document.getElementById('shape-feedback').textContent = '';
+
+    const keys = Object.keys(SHAPES);
+    const hard = no > EASY_ROUNDS;
+    const answerKey = hard ? rand(CHIRAL) : rand(keys);
+    const color = rand(COLORS);
+    const rotation = rand([90, 180, 270]);
+    const cells = SHAPES[answerKey];
+
+    document.getElementById('shape-target').innerHTML =
+      shapeSvg(cells, color, 0, 130);
+    document.querySelector('#screen-shape .game-guide').innerHTML = hard
+      ? '⚠️ 조심! <b>뒤집힌(거울) 모양</b>은 정답이 아니에요. 돌려서 같아지는 것만 고르세요!'
+      : '위의 모양을 <b>빙글 돌리면</b> 아래 중 어떤 것이 될까요?';
+
+    let choices;
+    if (hard) {
+      // 어려움: 정답 1 + 거울상 2(서로 다른 회전) + 다른 모양 1
+      const rots = [0, 90, 180, 270].sort(() => Math.random() - .5);
+      const other = rand(keys.filter(k => k !== answerKey));
+      choices = [
+        { cells, ok: true, rot: rotation },
+        { cells: mirror(cells), ok: false, rot: rots[0] },
+        { cells: mirror(cells), ok: false, rot: rots[1] },
+        { cells: SHAPES[other], ok: false, rot: rand([0, 90, 180, 270]) },
+      ];
+    } else {
+      // 쉬움: 정답 1 + 다른 모양 3
+      const others = keys.filter(k => k !== answerKey).sort(() => Math.random() - .5).slice(0, 3);
+      choices = [
+        { cells, ok: true, rot: rotation },
+        ...others.map(k => ({ cells: SHAPES[k], ok: false, rot: rand([0, 90, 180, 270]) })),
+      ];
+    }
+    choices.sort(() => Math.random() - .5);
+
+    const box = document.getElementById('shape-choices');
+    box.innerHTML = '';
+    choices.forEach(c => {
+      const btn = document.createElement('button');
+      btn.className = 'shape-choice';
+      btn.innerHTML = shapeSvg(c.cells, color, c.rot, 100);
+      btn.onclick = () => pick(c.ok, btn);
+      box.appendChild(btn);
+    });
+  }
+
+  function pick(ok, btn) {
+    if (lock) return;
+    lock = true;
+    const fb = document.getElementById('shape-feedback');
+    if (ok) {
+      score++; streak++;
+      btn.classList.add('choice-good');
+      fb.innerHTML = `<span class="feedback-good">⭕ 정답!${streakText(streak)}</span>`;
+    } else {
+      streak = 0;
+      btn.classList.add('choice-bad');
+      fb.innerHTML = '<span class="feedback-bad">❌ 아쉬워요!</span>';
+    }
+    setTimeout(next, ok ? 900 : 1400);
+  }
+
+  function finish() {
+    showResult({
+      score, max: TOTAL, gameKey: 'shape',
+      detailHtml: `머릿속으로 모양을 돌려보는 <b>공간 지각(두정엽)</b> 훈련이었어요.`,
+      retryFn: start,
+    });
+  }
+
+  return { start };
+})();
+
+</script>
+<script>
+// 측두엽: 같은 그림 판별 (Speed Match) - 직전 그림과 같은지 판단
+const Speed = (() => {
+  const TOTAL = 10;
+  const SYMBOLS = ['🍎', '🍌', '🍇', '🍊'];
+
+  let no = 0, score = 0, streak = 0, prev = null, current = null, lock = false;
+  const rand = arr => arr[Math.floor(Math.random() * arr.length)];
+
+  function start() {
+    no = 0; score = 0; streak = 0; lock = false;
+    prev = null;
+    current = rand(SYMBOLS);
+    document.getElementById('speed-no').textContent = '0';
+    document.getElementById('speed-card').textContent = current;
+    document.getElementById('speed-guide').textContent = '이 그림을 잘 기억하세요!';
+    document.getElementById('speed-feedback').textContent = '';
+    setButtons(false);
+    document.getElementById('speed-begin').classList.remove('hidden');
+    showScreen('screen-speed');
+  }
+
+  function setButtons(on) {
+    document.getElementById('speed-same').disabled = !on;
+    document.getElementById('speed-diff').disabled = !on;
+  }
+
+  function begin() {
+    document.getElementById('speed-begin').classList.add('hidden');
+    document.getElementById('speed-guide').textContent = '방금 전 그림과 같은가요?';
+    nextCard();
+  }
+
+  function nextCard() {
+    no++;
+    if (no > TOTAL) return finish();
+    lock = false;
+    prev = current;
+    // 50% 확률로 같은 그림
+    current = Math.random() < 0.5 ? prev : rand(SYMBOLS.filter(s => s !== prev));
+    document.getElementById('speed-no').textContent = no;
+    document.getElementById('speed-card').textContent = current;
+    document.getElementById('speed-feedback').textContent = '';
+    setButtons(true);
+  }
+
+  function answer(saidSame) {
+    if (lock) return;
+    lock = true;
+    setButtons(false);
+    const ok = saidSame === (current === prev);
+    const fb = document.getElementById('speed-feedback');
+    if (ok) {
+      score++; streak++;
+      fb.innerHTML = `<span class="feedback-good">⭕ 정답!${streakText(streak)}</span>`;
+    } else {
+      streak = 0;
+      fb.innerHTML = `<span class="feedback-bad">❌ 아쉬워요! (직전 그림: ${prev})</span>`;
+    }
+    setTimeout(nextCard, ok ? 700 : 1500);
+  }
+
+  function quit() { goHome(); }
+
+  function finish() {
+    showResult({
+      score, max: TOTAL, gameKey: 'speed',
+      detailHtml: `방금 본 것을 붙잡아두는 <b>순간 기억과 판단 속도(측두엽)</b> 훈련이었어요.`,
+      retryFn: start,
+    });
+  }
+
+  return { start, begin, answer, quit };
+})();
+
+</script>
+<script>
+// 좌측 전두엽: 색깔 글자 (스트룹) - 글자의 뜻과 칠해진 색이 같은지 판단
+const Stroop = (() => {
+  const TOTAL = 10;
+  const COLORS = [
+    { name: '빨강', hex: '#dc2626' },
+    { name: '파랑', hex: '#2563eb' },
+    { name: '보라', hex: '#9333ea' },
+    { name: '초록', hex: '#16a34a' },
+  ];
+
+  let no = 0, score = 0, streak = 0, isMatch = false, lock = false;
+  const rand = arr => arr[Math.floor(Math.random() * arr.length)];
+
+  function start() {
+    no = 0; score = 0; streak = 0;
+    showScreen('screen-stroop');
+    next();
+  }
+
+  function next() {
+    no++;
+    if (no > TOTAL) return finish();
+    lock = false;
+    document.getElementById('stroop-no').textContent = no;
+    document.getElementById('stroop-feedback').textContent = '';
+
+    const word = rand(COLORS);
+    // 50% 확률로 뜻과 색 일치
+    isMatch = Math.random() < 0.5;
+    const ink = isMatch ? word : rand(COLORS.filter(c => c.name !== word.name));
+
+    const el = document.getElementById('stroop-word');
+    el.textContent = word.name;
+    el.style.color = ink.hex;
+  }
+
+  function answer(saidMatch) {
+    if (lock) return;
+    lock = true;
+    const ok = saidMatch === isMatch;
+    const fb = document.getElementById('stroop-feedback');
+    if (ok) {
+      score++; streak++;
+      fb.innerHTML = `<span class="feedback-good">⭕ 정답!${streakText(streak)}</span>`;
+    } else {
+      streak = 0;
+      fb.innerHTML = `<span class="feedback-bad">❌ 아쉬워요! ${isMatch ? '뜻과 색이 같았어요' : '뜻과 색이 달랐어요'}</span>`;
+    }
+    setTimeout(next, ok ? 700 : 1500);
+  }
+
+  function finish() {
+    showResult({
+      score, max: TOTAL, gameKey: 'stroop',
+      detailHtml: `헷갈리는 정보를 억누르고 규칙을 지키는 <b>논리 제어(좌측 전두엽)</b> 훈련이었어요.<br>` +
+        `글자를 읽으려는 습관을 참는 것이 핵심이에요!`,
+      retryFn: start,
+    });
+  }
+
+  return { start, answer };
+})();
+
+</script>
+<script>
+// 미션 1: 기억력 카드 뒤집기 (동물 짝 맞추기)
+const Memory = (() => {
+  const ANIMALS = ['🐶', '🐱', '🐰', '🐦', '🐢', '🐠'];
+  let first = null, lock = false, matched = 0, tries = 0;
+
+  function start() {
+    matched = 0; tries = 0; first = null; lock = false;
+    document.getElementById('memory-score').textContent = '0';
+    document.getElementById('memory-tries').textContent = '0';
+
+    const cards = [...ANIMALS, ...ANIMALS]
+      .map(a => ({ a, r: Math.random() }))
+      .sort((x, y) => x.r - y.r);
+
+    const grid = document.getElementById('memory-grid');
+    grid.innerHTML = '';
+    cards.forEach(({ a }) => {
+      const btn = document.createElement('button');
+      btn.className = 'mcard';
+      btn.dataset.animal = a;
+      btn.innerHTML = `
+        <div class="mcard-inner">
+          <div class="mcard-face mcard-back">🧠</div>
+          <div class="mcard-face mcard-front">${a}</div>
+        </div>`;
+      btn.onclick = () => flip(btn);
+      grid.appendChild(btn);
+    });
+    showScreen('screen-memory');
+  }
+
+  function flip(card) {
+    if (lock || card.classList.contains('flipped')) return;
+    card.classList.add('flipped');
+    tries++;
+    document.getElementById('memory-tries').textContent = tries;
+
+    if (!first) { first = card; return; }
+
+    const a = first, b = card;
+    first = null;
+    if (a.dataset.animal === b.dataset.animal) {
+      a.classList.add('matched'); b.classList.add('matched');
+      matched++;
+      document.getElementById('memory-score').textContent = matched;
+      if (matched === ANIMALS.length) setTimeout(finish, 600);
+    } else {
+      lock = true;
+      setTimeout(() => {
+        a.classList.remove('flipped');
+        b.classList.remove('flipped');
+        lock = false;
+      }, 900);
+    }
+  }
+
+  function finish() {
+    showResult({
+      score: matched,
+      max: ANIMALS.length,
+      gameKey: 'memory',
+      detailHtml: `총 <b>${tries}번</b> 뒤집어서 ${matched}쌍을 모두 찾으셨어요!<br>` +
+        `뒤집은 횟수가 적을수록 기억력이 좋다는 뜻이에요.`,
+      retryFn: start,
+    });
+  }
+
+  return { start };
+})();
+
+</script>
+<script>
+// 미션 2: 반응속도 청기백기
+// 깃발 상태: 'up' | 'neutral' | 'down'  (경우의 수 3x3)
+// 1단계: 한 깃발만 지시 / 2단계: 두 깃발 모두 지시 / 3단계: "~하지 말고" 지시 포함
+const Flag = (() => {
+  const TOTAL_ROUNDS = 9;
+  const LEVEL_TIME = { 1: 8000, 2: 10000, 3: 10000 };
+
+  let round = 0, score = 0, history = [];
+  let state = { blue: 'neutral', white: 'neutral' };
+  let target = null, command = '';
+  let timer = null, earlyTimer = null, tickTimer = null, roundActive = false;
+
+  const rand = arr => arr[Math.floor(Math.random() * arr.length)];
+  const NAME = { blue: '청기', white: '백기' };
+
+  function levelOf(r) { return r <= 3 ? 1 : r <= 6 ? 2 : 3; }
+
+  function makeCommand(level) {
+    const acts = ['up', 'down'];
+    if (level === 1) {
+      const f = rand(['blue', 'white']), a = rand(acts);
+      const other = f === 'blue' ? 'white' : 'blue';
+      return {
+        target: { [f]: a, [other]: 'neutral' },
+        text: `${NAME[f]} ${a === 'up' ? '올려' : '내려'}!`,
+      };
+    }
+    if (level === 2) {
+      const aB = rand(acts), aW = rand(acts);
+      const firstBlue = Math.random() < 0.5;
+      const seg = (f, a, last) =>
+        `${NAME[f]} ${a === 'up' ? (last ? '올려' : '올리고') : (last ? '내려' : '내리고')}`;
+      const text = firstBlue
+        ? `${seg('blue', aB, false)} ${seg('white', aW, true)}!`
+        : `${seg('white', aW, false)} ${seg('blue', aB, true)}!`;
+      return { target: { blue: aB, white: aW }, text };
+    }
+    // 3단계: 한 깃발은 "~하지 말고"(가만히), 다른 깃발은 동작
+    const negF = rand(['blue', 'white']);
+    const actF = negF === 'blue' ? 'white' : 'blue';
+    const negA = rand(acts), actA = rand(acts);
+    return {
+      target: { [negF]: 'neutral', [actF]: actA },
+      text: `${NAME[negF]} ${negA === 'up' ? '올리지 말고' : '내리지 말고'} ` +
+            `${NAME[actF]} ${actA === 'up' ? '올려' : '내려'}!`,
+    };
+  }
+
+  // 지시문 표시: 깃발 이름은 색깔 칩으로. 화살표 힌트는 easy 모드에서만 (기본 꺼짐)
+  const EASY_MODE = false;
+  function commandHtml(text) {
+    let t = text
+      .replace(/청기/g, '<span class="cmd-flag cmd-blue">청기</span>')
+      .replace(/백기/g, '<span class="cmd-flag cmd-white">백기</span>');
+    if (EASY_MODE) {
+      t = t
+        .replace(/올리지 말고/g, '<span class="cmd-act cmd-stop">✋올리지 말고</span>')
+        .replace(/내리지 말고/g, '<span class="cmd-act cmd-stop">✋내리지 말고</span>')
+        .replace(/올리고/g, '<span class="cmd-act cmd-up">⬆올리고</span>')
+        .replace(/내리고/g, '<span class="cmd-act cmd-down">⬇내리고</span>')
+        .replace(/올려/g, '<span class="cmd-act cmd-up">⬆올려</span>')
+        .replace(/내려/g, '<span class="cmd-act cmd-down">⬇내려</span>');
+    }
+    return t;
+  }
+
+  function start() {
+    round = 0; score = 0; history = [];
+    showScreen('screen-flag');
+    nextRound();
+  }
+
+  function quit() {
+    clearTimeout(timer); clearTimeout(earlyTimer); clearInterval(tickTimer);
+    roundActive = false;
+    document.getElementById('flag-feedback').classList.add('hidden');
+    goHome();
+  }
+
+  function nextRound() {
+    round++;
+    if (round > TOTAL_ROUNDS) return finish();
+
+    const level = levelOf(round);
+    state = { blue: 'neutral', white: 'neutral' };
+    renderFlags();
+
+    const c = makeCommand(level);
+    target = c.target; command = c.text;
+
+    document.getElementById('flag-round').textContent = round;
+    document.getElementById('flag-level-banner').textContent = `${level}단계`;
+    document.getElementById('flag-command').textContent = '준비...';
+    document.getElementById('flag-feedback').classList.add('hidden');
+
+    // 타이머 바 초기화
+    const bar = document.getElementById('flag-timer');
+    const num = document.getElementById('flag-timer-num');
+    bar.classList.remove('running', 'low');
+    num.classList.remove('low');
+    bar.style.width = '100%';
+    num.textContent = Math.round(LEVEL_TIME[level] / 1000) + '초';
+
+    // 잠깐 "준비..." 후 지시 표시
+    setTimeout(() => {
+      document.getElementById('flag-command').innerHTML = commandHtml(command);
+      roundActive = true;
+      const ms = LEVEL_TIME[level];
+      requestAnimationFrame(() => {
+        bar.classList.add('running');
+        bar.style.transitionDuration = ms + 'ms';
+        bar.style.width = '0%';
+      });
+      // 남은 시간 숫자 표시 (3초 이하는 빨간색)
+      const endAt = Date.now() + ms;
+      clearInterval(tickTimer);
+      tickTimer = setInterval(() => {
+        const left = Math.max(0, endAt - Date.now());
+        num.textContent = Math.ceil(left / 1000) + '초';
+        if (left <= 3000) { num.classList.add('low'); bar.classList.add('low'); }
+      }, 200);
+      timer = setTimeout(evaluate, ms);
+    }, 800);
+  }
+
+  function renderFlags() {
+    for (const f of ['blue', 'white']) {
+      const el = document.getElementById('flag-' + f);
+      el.classList.remove('pos-up', 'pos-down');
+      if (state[f] === 'up') el.classList.add('pos-up');
+      if (state[f] === 'down') el.classList.add('pos-down');
+    }
+  }
+
+  // 스와이프: 한 칸씩 이동 (down -> neutral -> up)
+  function step(flag, dir) {
+    if (!roundActive) return;
+    const order = ['down', 'neutral', 'up'];
+    let i = order.indexOf(state[flag]);
+    i += dir === 'up' ? 1 : -1;
+    i = Math.max(0, Math.min(2, i));
+    state[flag] = order[i];
+    renderFlags();
+    checkEarlyFinish();
+  }
+
+  // 두 깃발이 목표 상태와 일치하면 잠시 후 바로 채점 (반응속도 게임답게)
+  function checkEarlyFinish() {
+    clearTimeout(earlyTimer);
+    if (state.blue === target.blue && state.white === target.white) {
+      earlyTimer = setTimeout(() => {
+        if (roundActive && state.blue === target.blue && state.white === target.white) {
+          clearTimeout(timer);
+          evaluate();
+        }
+      }, 700);
+    }
+  }
+
+  const POS_TEXT = { up: '위로 ⬆', down: '아래로 ⬇', neutral: '그대로 ✋' };
+
+  function evaluate() {
+    roundActive = false;
+    clearTimeout(timer); clearTimeout(earlyTimer); clearInterval(tickTimer);
+
+    const ok = state.blue === target.blue && state.white === target.white;
+    if (ok) score++;
+    history.push({ command, ok });
+
+    // 정답 화면(피드백) 표시
+    const fb = document.getElementById('flag-feedback');
+    const mark = document.getElementById('flag-feedback-mark');
+    const text = document.getElementById('flag-feedback-text');
+    const ans = document.getElementById('flag-feedback-answer');
+    mark.textContent = ok ? '⭕' : '❌';
+    text.textContent = ok ? '정답!' : '아쉬워요!';
+    text.className = 'feedback-text ' + (ok ? 'feedback-good' : 'feedback-bad');
+    ans.innerHTML =
+      `정답: <span class="cmd-flag cmd-blue">청기</span> ${POS_TEXT[target.blue]} · ` +
+      `<span class="cmd-flag cmd-white">백기</span> ${POS_TEXT[target.white]}`;
+    fb.classList.remove('hidden');
+
+    // 깃발을 정답 위치로 보여주기
+    state = { ...target };
+    renderFlags();
+
+    setTimeout(() => {
+      fb.classList.add('hidden');
+      nextRound();
+    }, ok ? 1300 : 2200);
+  }
+
+  function finish() {
+    const detail = history
+      .map((h, i) => `<div class="${h.ok ? 'rd-good' : 'rd-bad'}">${i + 1}. ${h.command} ${h.ok ? '⭕' : '❌'}</div>`)
+      .join('');
+    showResult({ score, max: TOTAL_ROUNDS, gameKey: 'flag', detailHtml: detail, retryFn: start });
+  }
+
+  // 스와이프 입력 처리: 드래그하는 동안 깃발이 손을 따라 움직이고, 놓으면 한 칸 이동
+  function bindZone(zoneId, flag) {
+    const zone = document.getElementById(zoneId);
+    const wrap = document.getElementById('flag-' + flag);
+    let startY = null;
+    const baseOffset = () =>
+      state[flag] === 'up' ? -70 : state[flag] === 'down' ? 70 : 0;
+
+    zone.addEventListener('pointerdown', e => {
+      startY = e.clientY;
+      try { zone.setPointerCapture(e.pointerId); } catch {}
+      wrap.style.transition = 'none';
+    });
+
+    zone.addEventListener('pointermove', e => {
+      if (startY === null || !roundActive) return;
+      const dy = Math.max(-80, Math.min(80, e.clientY - startY));
+      wrap.style.transform = `translateY(${baseOffset() + dy}px)`;
+    });
+
+    const release = e => {
+      if (startY === null) return;
+      const dy = (e.clientY ?? startY) - startY;
+      startY = null;
+      wrap.style.transition = '';
+      wrap.style.transform = '';
+      if (Math.abs(dy) >= 25) step(flag, dy < 0 ? 'up' : 'down');
+    };
+    zone.addEventListener('pointerup', release);
+    zone.addEventListener('pointercancel', release);
+  }
+  bindZone('zone-blue', 'blue');
+  bindZone('zone-white', 'white');
+
+  return { start, quit };
+})();
+
+</script>
+<script>
+// 미션 3: 언어 문맥 퀴즈
+// 수능/평가원 언어영역 스타일의 아주 쉬운 자작 문항 (문맥·논리 파악)
+// ※ 실제 기출을 쓰려면 평가원 이용 조건 확인 필요. 프로토타입은 자작 문항 사용.
+const Quiz = (() => {
+  const QUESTIONS = [
+    {
+      passage: '오랜 가뭄이 계속되자 농부들은 매일 하늘만 바라보았다. 마침내 굵은 빗방울이 떨어지자 농부들의 얼굴에는 (        )이 번졌다.',
+      question: '빈칸에 들어갈 말로 가장 알맞은 것은?',
+      choices: ['미소', '그늘', '불안', '한숨'],
+      answer: 0,
+      why: '기다리던 비가 내려 기뻐하는 상황이므로 "미소"가 알맞아요.',
+    },
+    {
+      passage: '모든 새는 알을 낳는다. 참새는 새이다.',
+      question: '두 문장으로부터 바르게 이끌어 낸 결론은?',
+      choices: [
+        '참새는 알을 낳는다.',
+        '참새는 날지 못한다.',
+        '모든 동물은 알을 낳는다.',
+        '알을 낳는 동물은 모두 새이다.',
+      ],
+      answer: 0,
+      why: '모든 새가 알을 낳고, 참새가 새라면 참새도 알을 낳는다는 결론이 나와요.',
+    },
+    {
+      passage: '"등잔 밑이 어둡다"라는 속담이 있다.',
+      question: '이 속담의 뜻으로 가장 알맞은 것은?',
+      choices: [
+        '가까이 있는 것을 오히려 잘 알지 못한다.',
+        '밤에는 일찍 자야 건강하다.',
+        '불을 아껴 써야 살림이 넉넉해진다.',
+        '어두운 곳에서는 책을 읽으면 안 된다.',
+      ],
+      answer: 0,
+      why: '등잔 바로 아래가 어두운 것처럼, 가까운 일일수록 잘 모른다는 뜻이에요.',
+    },
+    {
+      passage: '(가) 물을 끓인다.\n(나) 라면과 수프를 넣는다.\n(다) 그릇에 옮겨 담는다.\n(라) 4분간 더 끓인다.',
+      question: '라면을 끓이는 순서로 알맞게 배열한 것은?',
+      choices: [
+        '(가) → (나) → (라) → (다)',
+        '(나) → (가) → (다) → (라)',
+        '(가) → (다) → (나) → (라)',
+        '(다) → (라) → (가) → (나)',
+      ],
+      answer: 0,
+      why: '물을 끓인 뒤 면을 넣고, 더 끓인 다음 그릇에 담는 순서예요.',
+    },
+    {
+      passage: '걷기는 특별한 장비 없이 누구나 할 수 있는 운동이다. 심장과 폐를 튼튼하게 하고, 기분 전환에도 도움이 된다. 그래서 의사들은 하루 30분 걷기를 권한다.',
+      question: '이 글의 중심 내용으로 가장 알맞은 것은?',
+      choices: [
+        '걷기는 몸과 마음에 좋은 운동이다.',
+        '걷기에는 비싼 운동화가 필요하다.',
+        '의사는 하루 30분만 일해야 한다.',
+        '운동은 심장에 무리를 준다.',
+      ],
+      answer: 0,
+      why: '글 전체가 걷기의 좋은 점을 설명하고 있어요.',
+    },
+  ];
+
+  let idx = 0, score = 0, history = [], order = [], shuffled = [];
+
+  function start() {
+    idx = 0; score = 0; history = [];
+    // 문제 순서도 매번 섞기
+    order = QUESTIONS.map((_, i) => i).sort(() => Math.random() - .5);
+    render();
+    showScreen('screen-quiz');
+  }
+
+  function render() {
+    const q = QUESTIONS[order[idx]];
+    document.getElementById('quiz-no').textContent = idx + 1;
+    document.getElementById('quiz-passage').innerText = q.passage;
+    document.getElementById('quiz-question').textContent = q.question;
+    document.getElementById('quiz-feedback').classList.add('hidden');
+    document.getElementById('quiz-next').classList.add('hidden');
+
+    // 보기 순서 섞기 (정답 위치가 매번 다르게)
+    shuffled = q.choices
+      .map((c, i) => ({ text: c, ok: i === q.answer }))
+      .sort(() => Math.random() - .5);
+
+    const box = document.getElementById('quiz-choices');
+    box.innerHTML = '';
+    const marks = ['①', '②', '③', '④'];
+    shuffled.forEach((c, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'quiz-choice';
+      btn.textContent = `${marks[i]} ${c.text}`;
+      btn.onclick = () => select(i, btn);
+      box.appendChild(btn);
+    });
+  }
+
+  function select(i, btn) {
+    const q = QUESTIONS[order[idx]];
+    const buttons = document.querySelectorAll('.quiz-choice');
+    buttons.forEach(b => (b.disabled = true));
+
+    const ok = shuffled[i].ok;
+    if (ok) score++;
+    history.push({ q: q.question, ok });
+
+    buttons[shuffled.findIndex(c => c.ok)].classList.add('correct');
+    if (!ok) btn.classList.add('wrong');
+
+    const fb = document.getElementById('quiz-feedback');
+    fb.innerHTML = ok
+      ? `<span class="feedback-good">⭕ 정답이에요!</span><br><small>${q.why}</small>`
+      : `<span class="feedback-bad">❌ 아쉬워요.</span><br><small>${q.why}</small>`;
+    fb.classList.remove('hidden');
+
+    const nextBtn = document.getElementById('quiz-next');
+    nextBtn.textContent = idx === order.length - 1 ? '결과 보기 →' : '다음 문제 →';
+    nextBtn.classList.remove('hidden');
+  }
+
+  function next() {
+    idx++;
+    if (idx >= order.length) return finish();
+    render();
+  }
+
+  function finish() {
+    const detail = history
+      .map((h, i) => `<div class="${h.ok ? 'rd-good' : 'rd-bad'}">${i + 1}번 문제 ${h.ok ? '⭕' : '❌'}</div>`)
+      .join('');
+    showResult({ score, max: QUESTIONS.length, gameKey: 'quiz', detailHtml: detail, retryFn: start });
+  }
+
+  return { start, next };
+})();
+
+</script>
+</body>
+</html>
