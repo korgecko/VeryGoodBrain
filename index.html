@@ -324,7 +324,7 @@ body {
 /* ---------- 뇌 영역 소개 페이지 ---------- */
 .region-brain {
   background: var(--card); border: 2px solid var(--line); border-radius: 20px;
-  padding: 18px 24px; margin-bottom: 14px;
+  padding: 14px 10px; margin-bottom: 14px;
 }
 /* height는 SVG 속성으로 'auto'를 받지 못하므로 CSS에서 비율에 맞춘다 */
 .region-brain svg { display: block; width: 100%; height: auto; }
@@ -815,60 +815,89 @@ const Region = (() => {
   };
   const OCCIPITAL = 'M178 68 C 182 85, 175 100, 160 106 C 150 108, 142 96, 138 84 C 150 78, 165 72, 178 68 Z';
 
-  // 4방면 라벨 위치 (viewBox 0 0 340 235, 뇌는 translate(60,42))
+  // 라벨을 양옆에 두면 뇌가 가로폭의 45%밖에 못 써서 휴대폰에서 너무 작다.
+  // 위/아래 네 귀퉁이로 옮기고 그 사이를 뇌가 가득 채우게 한다.
+  // 뇌 그림 자체 좌표: x 30~184, y 22~136 -> 아래 BRAIN_TF로 확대해 배치한다.
+  const VB = { w: 340, h: 330 };
+  const BRAIN_TF = 'translate(-38.4, 5.1) scale(1.948)'; // x 20~320, y 48~270에 놓임
+  // 지시선 끝점은 각 부위 안쪽 지점을 위 변환에 넣어 구한 값
   const LABELS = {
-    lfrontal: { x: 8,   y: 30,  anchor: 'start', line: [76, 40, 112, 74] },
-    rfrontal: { x: 8,   y: 188, anchor: 'start', line: [76, 196, 105, 148] },
-    parietal: { x: 332, y: 30,  anchor: 'end',   line: [264, 40, 212, 76] },
-    temporal: { x: 332, y: 188, anchor: 'end',   line: [264, 196, 178, 152] },
+    lfrontal: { x: 8,   y: 22,  anchor: 'start', line: [46, 52, 88, 104] },
+    parietal: { x: 332, y: 22,  anchor: 'end',   line: [294, 52, 221, 108] },
+    rfrontal: { x: 8,   y: 298, anchor: 'start', line: [46, 272, 82, 171] },
+    temporal: { x: 332, y: 298, anchor: 'end',   line: [294, 272, 147, 194] },
   };
 
   let selected = null;
 
+  // 고르지 않은 부위도 옅게나마 제 색을 띠게 해서 네 영역이 한눈에 구분되도록 한다
+  function partFill(key) {
+    return selected === key
+      ? `fill="${REGIONS[key].color}"`
+      : `fill="${REGIONS[key].color}" fill-opacity=".22"`;
+  }
+  // 경계선은 흰색 대신 카드 배경색이라야 어두운 화면에서도 자연스럽다.
+  // 굵기는 확대 배율만큼 줄인다. 3 그대로 두면 2배로 두꺼워져 뇌가 아니라
+  // 조각난 원그래프처럼 보인다.
+  const EDGE = 'stroke="var(--card)" stroke-width="1.6"';
+
+  function brainBody(base) {
+    return `
+      ${Object.keys(PARTS).map(k =>
+        `<path d="${PARTS[k]}" data-region="${k}" style="cursor:pointer" ${partFill(k)} ${EDGE}/>`
+      ).join('')}
+      <path d="${OCCIPITAL}" fill="${base}" ${EDGE}/>
+      <ellipse cx="163" cy="119" rx="21" ry="11" fill="${base}" ${EDGE}/>
+      <path d="M138 112 C 136 122, 132 130, 126 136" stroke="${base}" stroke-width="8"
+            stroke-linecap="round" fill="none"/>`;
+  }
+
   function dashboardSvg() {
     const base = 'var(--line)';
-    const parts = Object.keys(PARTS).map(key => {
-      const active = selected === key;
-      return `<path d="${PARTS[key]}" data-region="${key}" style="cursor:pointer"
-        fill="${active ? REGIONS[key].color : base}" stroke="#fff" stroke-width="3"/>`;
-    }).join('');
     const labels = Object.keys(LABELS).map(key => {
       const L = LABELS[key], r = REGIONS[key];
       const active = selected === key;
+      const start = L.anchor === 'start';
+      const dotX = start ? L.x + 8 : L.x - 8;     // 라벨 바깥쪽에 영역 색 점
+      const textX = start ? L.x + 22 : L.x - 22;
+      const hitX = start ? L.x - 6 : L.x - 154;   // 글자만 누르기 어렵지 않도록 넓은 터치 영역
       return `
         <line x1="${L.line[0]}" y1="${L.line[1]}" x2="${L.line[2]}" y2="${L.line[3]}"
-              stroke="${active ? r.color : 'var(--text-sub)'}" stroke-width="${active ? 2.5 : 1.5}"/>
+              stroke="${active ? r.color : 'var(--text-sub)'}" stroke-width="${active ? 3 : 1.5}"
+              stroke-linecap="round" ${active ? '' : 'stroke-dasharray="4 4"'}/>
+        <circle cx="${L.line[2]}" cy="${L.line[3]}" r="${active ? 6 : 4}"
+                fill="${active ? 'var(--card)' : r.color}"
+                stroke="${active ? 'var(--card)' : 'var(--card)'}" stroke-width="2"/>
         <g data-region="${key}" style="cursor:pointer">
-          <text x="${L.x}" y="${L.y}" text-anchor="${L.anchor}" font-size="16" font-weight="800"
+          <rect x="${hitX}" y="${L.y - 24}" width="160" height="48" fill="transparent"/>
+          <circle cx="${dotX}" cy="${L.y - 6}" r="${active ? 8 : 6}" fill="${r.color}"
+                  fill-opacity="${active ? 1 : .45}"/>
+          <text x="${textX}" y="${L.y}" text-anchor="${L.anchor}" font-size="20" font-weight="800"
                 fill="${active ? r.color : 'var(--text)'}">${r.title}</text>
-          <text x="${L.x}" y="${L.y + 18}" text-anchor="${L.anchor}" font-size="12"
+          <text x="${textX}" y="${L.y + 20}" text-anchor="${L.anchor}" font-size="15"
                 fill="var(--text-sub)">${r.func}</text>
         </g>`;
     }).join('');
     return `
-    <svg viewBox="0 0 340 235" aria-label="뇌 대시보드">
-      <g transform="translate(60,42)">
-        ${parts}
-        <path d="${OCCIPITAL}" fill="${base}" stroke="#fff" stroke-width="3"/>
-        <ellipse cx="163" cy="119" rx="21" ry="11" fill="${base}" stroke="#fff" stroke-width="3"/>
-        <path d="M138 112 C 136 122, 132 130, 126 136" stroke="${base}" stroke-width="8"
-              stroke-linecap="round" fill="none"/>
-      </g>
+    <svg viewBox="0 0 ${VB.w} ${VB.h}" aria-label="뇌 대시보드">
+      <g transform="${BRAIN_TF}">${brainBody(base)}</g>
       ${labels}
     </svg>`;
   }
 
   // 영역 페이지용: 해당 부위만 강조 (전두엽은 좌/우 해당 반쪽만)
+  // viewBox를 뇌 그림 크기(x 30~184, y 22~136)에 딱 맞춰 남는 여백을 없앤다
   function regionPageSvg(key) {
     const base = 'var(--line)';
     const parts = Object.keys(PARTS).map(k =>
-      `<path d="${PARTS[k]}" fill="${k === key ? REGIONS[key].color : base}" stroke="#fff" stroke-width="3"/>`
+      `<path d="${PARTS[k]}" fill="${REGIONS[k].color}"
+         ${k === key ? '' : 'fill-opacity=".18"'} ${EDGE}/>`
     ).join('');
     return `
-    <svg viewBox="0 0 220 150" aria-label="뇌 그림">
+    <svg viewBox="24 16 166 126" aria-label="뇌 그림">
       ${parts}
-      <path d="${OCCIPITAL}" fill="${base}" stroke="#fff" stroke-width="3"/>
-      <ellipse cx="163" cy="119" rx="21" ry="11" fill="${base}" stroke="#fff" stroke-width="3"/>
+      <path d="${OCCIPITAL}" fill="${base}" ${EDGE}/>
+      <ellipse cx="163" cy="119" rx="21" ry="11" fill="${base}" ${EDGE}/>
       <path d="M138 112 C 136 122, 132 130, 126 136" stroke="${base}" stroke-width="8"
             stroke-linecap="round" fill="none"/>
     </svg>`;
