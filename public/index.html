@@ -930,20 +930,27 @@ const Brain3D = (() => {
 
       x *= 0.88 * g; y *= 0.86 * g; z *= 1.10 * g;
 
+      // 앞뒤 끝을 좁혀 달걀 모양으로 만든다. 뭉툭하면 원통처럼 보인다.
+      // 이마는 둥글고 뒤통수가 더 좁으므로 앞뒤를 같은 세기로 좁히면 안 된다
+      const taper = 1
+        - 0.30 * Math.pow(Math.max(0, z - 0.45), 1.3)      // 이마: 살짝만
+        - 0.48 * Math.pow(Math.max(0, -z - 0.40), 1.3);    // 뒤통수: 더 좁게
+      x *= taper; y *= taper;
+
       // 이마 아래를 깎아 눈 위 곡선을 만든다
       if (z > 0.35) y += ((z - 0.35) / 0.9) * 0.22 * Math.max(0, -y - 0.10);
-      // 뒤통수는 살짝 뾰족하게
-      if (z < -0.70) z -= 0.12 * (-z - 0.70);
       // 아래는 납작하게 (진짜 뇌는 바닥이 평평하다)
       if (y < -0.30) y = -0.30 + (y + 0.30) * 0.60;
-      // 좌우를 가르는 세로 고랑
-      y -= Math.exp(-((x / 0.09) ** 2)) * 0.17 * Math.max(0, y + 0.15);
+      // 좌우 고랑을 따라 안쪽으로 꺼지게
+      y -= Math.exp(-((x / 0.10) ** 2)) * 0.12 * Math.max(0, y + 0.15);
 
       // 황금각으로 뿌리면 나선 무늬가 눈에 띈다. 살짝 흔들어 지운다
       x += (rnd() - 0.5) * 0.035; y += (rnd() - 0.5) * 0.035; z += (rnd() - 0.5) * 0.035;
 
-      // 실비우스 고랑: 옆면에서 이마엽과 관자엽을 가르는 틈.
-      // 점을 비워 실제로 골이 파인 것처럼 보이게 한다
+      // 좌우를 가르는 세로 고랑: 위에서 봤을 때 두 반구가 갈라져 보여야 한다.
+      // 꺼지게 하는 것만으로는 위에서 티가 안 나서 가운데 점을 아예 비운다
+      if (Math.abs(x) < 0.075 && y > -0.02) continue;
+      // 실비우스 고랑: 옆면에서 이마엽과 관자엽을 가르는 틈
       if (Math.abs(x) > 0.28 && Math.abs(y - (-0.02 - 0.34 * z)) < 0.055) continue;
 
       out.push(mk(x, y, z, region(x, y, z)));
@@ -956,6 +963,8 @@ const Brain3D = (() => {
       const x = 0.90 * k * s2 * Math.cos(u);
       const y = 0.70 * k * Math.cos(v) - 0.04;
       const z = 1.20 * k * s2 * Math.sin(u);
+      // 속 점이 고랑을 메우면 위에서 봤을 때 골이 사라진다
+      if (Math.abs(x) < 0.09 && y > -0.05) continue;
       out.push(mk(x, y, z, region(x, y, z)));
     }
 
@@ -963,9 +972,9 @@ const Brain3D = (() => {
     for (const side of [-1, 1]) {
       for (let i = 0; i < 80; i++) {
         const u = rnd() * Math.PI * 2, v = Math.acos(2 * rnd() - 1), s2 = Math.sin(v);
-        out.push(mk(side * (0.48 + 0.18 * s2 * Math.cos(u)),
-                    -0.34 + 0.17 * Math.cos(v),
-                    0.10 + 0.38 * s2 * Math.sin(u), 'temporal'));
+        out.push(mk(side * (0.46 + 0.17 * s2 * Math.cos(u)),
+                    -0.40 + 0.15 * Math.cos(v),
+                    0.12 + 0.44 * s2 * Math.sin(u), 'temporal'));
       }
     }
 
@@ -990,7 +999,7 @@ const Brain3D = (() => {
   // 좌표로 어느 영역인지 정한다. z+ 가 앞(이마), y+ 가 위
   function region(x, y, z) {
     if (z > 0.38) return x < 0 ? 'lfrontal' : 'rfrontal';   // 이마: 좌/우로 나뉜다
-    if (y < -0.12 && z > -0.55 && Math.abs(x) > 0.24) return 'temporal'; // 귀 옆 아래
+    if (y < -0.12 && z > -0.35 && Math.abs(x) > 0.24) return 'temporal'; // 귀 옆 아래
     return 'parietal';                                      // 나머지 위쪽·뒤쪽
   }
 
@@ -1046,7 +1055,7 @@ const Brain3D = (() => {
 
       const dim = sel && p.reg && p.reg !== sel ? 0.22 : (p.reg ? 1 : 0.5);
       const depth = (k - 0.75) / 0.75;                  // 앞에 있을수록 1에 가깝다
-      let a = (0.14 + 0.66 * Math.max(0, Math.min(1, depth))) * dim;
+      let a = (0.07 + 0.78 * Math.pow(Math.max(0, Math.min(1, depth)), 1.6)) * dim;
       if (sel && p.reg === sel) a = Math.min(1, a * 1.35 + 0.12 * Math.sin(t / 420 + p.tw * 6));
       const r = (0.7 + 1.5 * Math.max(0, depth)) * (sel && p.reg === sel ? 1.35 : 1) * dpr;
 
@@ -1090,7 +1099,7 @@ const Brain3D = (() => {
     for (const v of views) {
       if (!v.canvas.offsetParent) continue;            // 안 보이는 화면은 그리지 않는다
       if (v.canvas.clientWidth && v.canvas.width !== Math.round(v.canvas.clientWidth * v.dpr)) resize(v);
-      if (!v.drag && t - v.touched > 2500) v.yaw += 0.0026;   // 손을 떼면 천천히 돈다
+      if (!v.drag && t - v.touched > 2500) v.yaw += 0.0012;   // 손을 떼면 아주 천천히 돈다
       draw(v, t);
     }
   }
