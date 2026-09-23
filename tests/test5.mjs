@@ -59,6 +59,41 @@ for (const [dx,dy] of [[0,-30],[-60,0],[60,10],[0,40],[-30,40],[40,-40]]) {
 }
 chk(!!picked, 'E9 뇌를 탭하면 영역이 선택됨', String(picked));
 
+// 드래그 방향: 손가락이 짚은 면(카메라에 가까운 쪽)이 손가락을 따라가야 한다.
+// 화면 픽셀로 재면 점이 겹쳐 밝아지는 탓에 밀집한 곳이 결과를 끌고 가므로,
+// 렌더러와 같은 식으로 '가까운 면의 한 점'을 직접 투영해 확인한다.
+const proj = (P, yaw, pitch) => {
+  const [x, y, z] = P;
+  const cy1 = Math.cos(yaw), sy1 = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const x1 = x * cy1 + z * sy1, z1 = -x * sy1 + z * cy1;
+  return { sx: x1, sy: -(y * cp - z1 * sp), depth: y * sp + z1 * cp };
+};
+const angles = () => p.evaluate(()=>{const v=Brain3D.mount(document.getElementById('home-brain-canvas'),{});
+  return {yaw:v.yaw, pitch:v.pitch};});
+const reset = () => p.evaluate(()=>{const v=Brain3D.mount(document.getElementById('home-brain-canvas'),{});
+  v.yaw=-1.25; v.pitch=0.12; v.touched=performance.now()+1e9;});
+const bx = box.x + box.width/2, by = box.y + box.height/2;
+
+for (const [label, dx, dy] of [['오른쪽',60,0], ['왼쪽',-60,0], ['아래',0,60], ['위',0,-60]]) {
+  await reset();
+  const a = await angles();
+  // 지금 화면 45도 자리에 보이는 '가까운 쪽' 점
+  const th = Math.PI/4 - a.yaw;
+  const P = dx ? [Math.sin(th), 0, Math.cos(th)]
+               : [0, Math.sin(Math.PI/4 + a.pitch), Math.cos(Math.PI/4 + a.pitch)];
+  const before = proj(P, a.yaw, a.pitch);
+  await p.mouse.move(bx, by); await p.mouse.down();
+  await p.mouse.move(bx+dx, by+dy, {steps:10}); await p.mouse.up();
+  await p.waitForTimeout(120);
+  const c = await angles();
+  const after = proj(P, c.yaw, c.pitch);
+  const moved = dx ? after.sx - before.sx : after.sy - before.sy;
+  chk(before.depth > 0 && Math.sign(moved) === Math.sign(dx || dy),
+      `E14 ${label}으로 끌면 가까운 면이 따라옴`,
+      `깊이 ${before.depth.toFixed(2)} / 이동 ${moved.toFixed(3)}`);
+}
+await reset();
+
 // 불빛 기억은 원래 분류대로 측두엽에 있어야 한다
 const opened = await p.evaluate(()=>{
   Region.open('temporal');

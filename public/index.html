@@ -1123,9 +1123,11 @@ const Brain3D = (() => {
       if (!v.drag) return;
       const dx = e.clientX - sx, dy = e.clientY - sy;
       moved += Math.abs(dx) + Math.abs(dy);
-      // 점이 비쳐 보이는 그림이라 눈에 들어오는 덩어리가 손가락을 따라와야
-      // 자연스럽다. 가까운 면 기준으로 돌리면 반대로 도는 것처럼 느껴진다
-      v.yaw -= dx * 0.011;
+      // 손가락이 짚은 면(가까운 쪽)이 손가락을 따라가야 한다.
+      // 적도면의 점은 화면에서 sin(각도+yaw) 자리에 찍히므로, 가까운 면(|각도+yaw|<90°)
+      // 에서는 yaw가 커질수록 오른쪽으로 간다. 그래서 오른쪽으로 끌면 yaw를 더한다.
+      // 위아래는 pitch가 커질 때 가까운 면이 내려가므로 아래로 끌 때 더한다.
+      v.yaw += dx * 0.009;
       v.pitch = Math.max(-0.9, Math.min(0.9, v.pitch + dy * 0.009));
       sx = e.clientX; sy = e.clientY;
       v.touched = performance.now();
