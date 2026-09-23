@@ -5,10 +5,18 @@ p.on('console',m=>{ if(m.type()==='error') errs.push('CONSOLE: '+m.text()); });
 
 // 오디오 노드 생성을 세어 실제로 소리를 냈는지 확인한다
 await p.addInitScript(() => {
-  window.__osc = 0;
+  window.__osc = 0; window.__starts = []; window.__stops = []; window.__verb = 0;
   const AC = window.AudioContext || window.webkitAudioContext;
-  const orig = AC.prototype.createOscillator;
-  AC.prototype.createOscillator = function () { window.__osc++; return orig.call(this); };
+  const oOsc = AC.prototype.createOscillator, oConv = AC.prototype.createConvolver;
+  AC.prototype.createOscillator = function () {
+    window.__osc++;
+    const o = oOsc.call(this);
+    const st = o.start.bind(o), sp = o.stop.bind(o);
+    o.start = t => { window.__starts.push(t); st(t); };
+    o.stop  = t => { window.__stops.push(t);  sp(t); };
+    return o;
+  };
+  AC.prototype.createConvolver = function () { window.__verb++; return oConv.call(this); };
 });
 await p.goto(new URL('../public/index.html', import.meta.url).href);
 const pass=[],fail=[]; const chk=(c,n,x='')=>(c?pass:fail).push(n+(c?'':' :: '+x));
@@ -117,10 +125,47 @@ const wrong=await p.evaluate((HEX)=>{Stroop.start();const el=document.getElement
 chk(wrong.includes('아쉬워요') && await osc()===n0, 'C1 오답에는 소리 없음', wrong);
 await p.evaluate(()=>goHome());
 
-// ---- 연속 정답이면 음이 하나 더 ----
-const notes=await p.evaluate(()=>{const before=window.__osc;Sound.correct(1);const two=window.__osc-before;
-  const b2=window.__osc;Sound.correct(3);return {두음:two, 세음:window.__osc-b2};});
-chk(notes.두음===2 && notes.세음===3, 'C2 3연속부터 음이 하나 더', JSON.stringify(notes));
+// ---- 소리의 결: 배음을 겹친 종소리인가 ----
+const tone = await p.evaluate(()=>{
+  const n0=window.__osc; window.__starts.length=0; window.__stops.length=0;
+  Sound.correct(0);
+  const made = window.__osc-n0;
+  const span = Math.max(...window.__stops) - Math.min(...window.__starts);
+  const onsets = [...new Set(window.__starts.map(t=>Math.round(t*1000)))].length;
+  return {오실레이터:made, 음수:onsets, 꼬리길이:+span.toFixed(2), 울림:window.__verb};
+});
+chk(tone.음수===3, 'C2 도-미-솔 세 음', JSON.stringify(tone));
+chk(tone.오실레이터===tone.음수*3, 'C3 음마다 배음 3겹 (기음+옥타브+12도)', JSON.stringify(tone));
+chk(tone.꼬리길이>0.7, 'C4 소리가 길게 사그라짐 (띡 하고 끊기지 않음)', JSON.stringify(tone));
+chk(tone.울림>0, 'C5 울림(리버브) 적용', JSON.stringify(tone));
+
+// 연속으로 맞힐수록 음이 늘어난다
+const grow = await p.evaluate(()=>{
+  const c=()=>{const n=window.__osc; return s=>{Sound.correct(s); const d=window.__osc-window.__osc+0; return 0;};};
+  const out={};
+  for (const s of [0,3,6]) { const n=window.__osc; Sound.correct(s); out[s]=(window.__osc-n)/3; }
+  return out;
+});
+chk(grow['0']===3 && grow['3']===4 && grow['6']===5,
+    'C6 연속 3회·6회에서 음이 하나씩 늘어남', JSON.stringify(grow));
+
+// 한 판을 끝내면 마무리 소리
+const fin = await p.evaluate(()=>{
+  const out={};
+  for (const r of [0.3,0.6,1.0]) { const n=window.__osc; Sound.finish(r); out[r]=(window.__osc-n)/3; }
+  return out;
+});
+chk(fin['0.3']===3 && fin['0.6']===4 && fin['1']===6,
+    'C7 마무리 소리는 잘할수록 길어짐', JSON.stringify(fin));
+
+// 결과 화면이 뜰 때 마무리 소리가 실제로 울리는지 (배선 확인)
+const wired = await p.evaluate(()=>{
+  const n=window.__osc;
+  showResult({score:8, max:10, gameKey:null, detailHtml:'', retryFn:()=>{}});
+  return window.__osc-n;
+});
+chk(wired>0, 'C8 게임을 끝내면 마무리 소리가 울림', '오실레이터 +'+wired);
+await p.evaluate(()=>goHome());
 
 // ---- 끄기 ----
 await p.evaluate(()=>Sound.toggle());
