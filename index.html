@@ -69,7 +69,7 @@ body {
 /* ---------- 출석 스탬프 ---------- */
 .attend-card {
   background: var(--card); border: 2px solid var(--line); border-radius: 16px;
-  padding: 16px; margin-bottom: 22px; box-shadow: 0 2px 6px rgba(30,41,59,.06);
+  padding: 16px; margin: 26px 0 22px; box-shadow: 0 2px 6px rgba(30,41,59,.06);
 }
 .attend-top {
   display: flex; justify-content: space-between; align-items: baseline;
@@ -328,6 +328,7 @@ body {
 }
 /* height는 SVG 속성으로 'auto'를 받지 못하므로 CSS에서 비율에 맞춘다 */
 .region-brain svg { display: block; width: 100%; height: auto; }
+.region-brain .lobe-on { filter: drop-shadow(0 3px 7px rgba(30,41,59,.3)); }
 .region-info { margin-bottom: 16px; }
 .region-badge {
   display: inline-block; color: #fff; border-radius: 999px;
@@ -412,12 +413,12 @@ body {
     <div class="points-badge">🏅 <span id="total-points">0</span> P</div>
   </header>
 
-  <div id="home-attend" class="attend-card"></div>
-
   <h2 class="section-title">나의 뇌 대시보드</h2>
 
   <div id="home-brain" class="region-brain"></div>
   <div id="home-regions" class="mission-list"></div>
+
+  <div id="home-attend" class="attend-card"></div>
 
   <p class="footnote">※ 프로토타입: 점수는 이 기기에만 저장됩니다</p>
 </section>
@@ -815,6 +816,21 @@ const Region = (() => {
   };
   const OCCIPITAL = 'M178 68 C 182 85, 175 100, 160 106 C 150 108, 142 96, 138 84 C 150 78, 165 72, 178 68 Z';
 
+  // 뇌주름. 큰 색 덩어리만 있으면 뇌가 아니라 조각난 원그래프처럼 보여서,
+  // 각 부위의 바깥 곡선과 나란히 흐르는 선을 넣는다.
+  // 부위 바깥으로 삐져나간 부분은 clipPath로 잘려 나가므로 넉넉하게 그려도 된다.
+  const GYRI = {
+    lfrontal: ['M97 32 C 70 32, 44 50, 40 74', 'M95 45 C 74 46, 56 60, 52 80',
+               'M92 57 C 78 58, 66 68, 62 84'],
+    parietal: ['M104 30 C 138 28, 164 46, 170 70', 'M104 44 C 132 42, 154 56, 160 78',
+               'M100 58 C 122 56, 142 66, 148 84'],
+    rfrontal: ['M34 82 C 48 92, 66 86, 92 72', 'M38 92 C 52 99, 70 92, 90 80'],
+    temporal: ['M56 100 C 76 92, 106 90, 136 90', 'M58 107 C 80 100, 108 98, 138 97'],
+  };
+  const OCC_GYRI = ['M144 78 C 158 75, 170 71, 181 70', 'M144 90 C 157 87, 168 83, 178 80'];
+  // 소뇌는 가로줄무늬가 특징
+  const CEREBELLUM_LINES = [113, 118, 123];
+
   // 라벨을 양옆에 두면 뇌가 가로폭의 45%밖에 못 써서 휴대폰에서 너무 작다.
   // 위/아래 네 귀퉁이로 옮기고 그 사이를 뇌가 가득 채우게 한다.
   // 뇌 그림 자체 좌표: x 30~184, y 22~136 -> 아래 BRAIN_TF로 확대해 배치한다.
@@ -831,23 +847,47 @@ const Region = (() => {
   let selected = null;
 
   // 고르지 않은 부위도 옅게나마 제 색을 띠게 해서 네 영역이 한눈에 구분되도록 한다
-  function partFill(key) {
-    return selected === key
+  function partFill(key, active) {
+    return key === active
       ? `fill="${REGIONS[key].color}"`
       : `fill="${REGIONS[key].color}" fill-opacity=".22"`;
+  }
+  // 주름 선. 고른 부위는 진한 색 위라 밝은 선, 나머지는 옅은 바탕 위라 제 색 선
+  function gyriGroup(clipId, paths, on, color) {
+    return `<g clip-path="url(#${clipId})" fill="none" stroke-width="1.2" stroke-linecap="round"
+               pointer-events="none" stroke="${on ? 'var(--card)' : color}"
+               stroke-opacity="${on ? .55 : .5}">
+      ${paths.map(d => `<path d="${d}"/>`).join('')}</g>`;
   }
   // 경계선은 흰색 대신 카드 배경색이라야 어두운 화면에서도 자연스럽다.
   // 굵기는 확대 배율만큼 줄인다. 3 그대로 두면 2배로 두꺼워져 뇌가 아니라
   // 조각난 원그래프처럼 보인다.
   const EDGE = 'stroke="var(--card)" stroke-width="1.6"';
 
-  function brainBody(base) {
+  // uid: 한 화면에 뇌 그림이 둘 이상 있어도 clipPath id가 겹치지 않도록
+  function brainBody(base, uid, active, clickable) {
+    const clips = Object.keys(PARTS)
+      .map(k => `<clipPath id="${uid}-${k}"><path d="${PARTS[k]}"/></clipPath>`).join('')
+      + `<clipPath id="${uid}-occ"><path d="${OCCIPITAL}"/></clipPath>`
+      + `<clipPath id="${uid}-cb"><ellipse cx="163" cy="119" rx="21" ry="11"/></clipPath>`;
+
+    const lobes = Object.keys(PARTS).map(k => {
+      const on = k === active;
+      return `<path d="${PARTS[k]}" ${clickable ? `data-region="${k}" style="cursor:pointer"` : ''}
+                    class="${on ? 'lobe-on' : ''}" ${partFill(k, active)} ${EDGE}/>
+              ${gyriGroup(`${uid}-${k}`, GYRI[k], on, REGIONS[k].color)}`;
+    }).join('');
+
     return `
-      ${Object.keys(PARTS).map(k =>
-        `<path d="${PARTS[k]}" data-region="${k}" style="cursor:pointer" ${partFill(k)} ${EDGE}/>`
-      ).join('')}
+      <defs>${clips}</defs>
+      ${lobes}
       <path d="${OCCIPITAL}" fill="${base}" ${EDGE}/>
+      ${gyriGroup(`${uid}-occ`, OCC_GYRI, false, 'var(--text-sub)')}
       <ellipse cx="163" cy="119" rx="21" ry="11" fill="${base}" ${EDGE}/>
+      <g clip-path="url(#${uid}-cb)" stroke="var(--text-sub)" stroke-opacity=".38"
+         stroke-width="1.1" pointer-events="none">
+        ${CEREBELLUM_LINES.map(y => `<line x1="140" y1="${y}" x2="186" y2="${y}"/>`).join('')}
+      </g>
       <path d="M138 112 C 136 122, 132 130, 126 136" stroke="${base}" stroke-width="8"
             stroke-linecap="round" fill="none"/>`;
   }
@@ -880,7 +920,7 @@ const Region = (() => {
     }).join('');
     return `
     <svg viewBox="0 0 ${VB.w} ${VB.h}" aria-label="뇌 대시보드">
-      <g transform="${BRAIN_TF}">${brainBody(base)}</g>
+      <g transform="${BRAIN_TF}">${brainBody(base, 'dash', selected, true)}</g>
       ${labels}
     </svg>`;
   }
@@ -888,18 +928,9 @@ const Region = (() => {
   // 영역 페이지용: 해당 부위만 강조 (전두엽은 좌/우 해당 반쪽만)
   // viewBox를 뇌 그림 크기(x 30~184, y 22~136)에 딱 맞춰 남는 여백을 없앤다
   function regionPageSvg(key) {
-    const base = 'var(--line)';
-    const parts = Object.keys(PARTS).map(k =>
-      `<path d="${PARTS[k]}" fill="${REGIONS[k].color}"
-         ${k === key ? '' : 'fill-opacity=".18"'} ${EDGE}/>`
-    ).join('');
     return `
     <svg viewBox="24 16 166 126" aria-label="뇌 그림">
-      ${parts}
-      <path d="${OCCIPITAL}" fill="${base}" ${EDGE}/>
-      <ellipse cx="163" cy="119" rx="21" ry="11" fill="${base}" ${EDGE}/>
-      <path d="M138 112 C 136 122, 132 130, 126 136" stroke="${base}" stroke-width="8"
-            stroke-linecap="round" fill="none"/>
+      ${brainBody('var(--line)', 'rgn', key, false)}
     </svg>`;
   }
 
