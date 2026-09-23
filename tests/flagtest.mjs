@@ -1,7 +1,10 @@
 import { chromium } from 'playwright';
-const file = process.argv[2];
+// 인자로 다른 파일을 줄 수도 있고, 없으면 이 레포의 페이지를 본다
+const PAGE = process.argv[2]
+  ? new URL('file://' + process.argv[2]).href
+  : new URL('../public/index.html', import.meta.url).href;
 const b = await chromium.launch(); const p = await b.newPage();
-await p.goto('file://' + file);
+await p.goto(PAGE);
 const round = () => p.evaluate(() => document.getElementById('flag-round').textContent);
 const out = [];
 

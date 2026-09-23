@@ -1,11 +1,11 @@
 import { chromium } from 'playwright';
-const URL = 'file:///home/user/tasks_prac/index.html';
+
 const b = await chromium.launch();
 const p = await b.newPage();
 const errs = [];
 p.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
 p.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE: ' + m.text()); });
-await p.goto(URL);
+await p.goto(new URL('../public/index.html', import.meta.url).href);
 
 const active = () => p.evaluate(() => document.querySelector('.screen.active').id);
 const pass = [], fail = [];
