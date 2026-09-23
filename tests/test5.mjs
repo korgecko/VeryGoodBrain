@@ -69,6 +69,26 @@ const opened = await p.evaluate(()=>{
 chk(opened.제목==='측두엽' && opened.게임.includes('불빛 기억'),
     'E10 불빛 기억이 측두엽에 있음', JSON.stringify(opened));
 chk(opened.영역페이지캔버스, 'E11 영역 페이지도 3D 뇌 사용');
+
+// 게임이 결과 화면에서 말하는 영역이 실제 등록된 영역과 맞는지
+// (게임을 다른 영역으로 옮기고 문구를 안 고치면 엉뚱한 곳을 훈련했다고 알려준다)
+const label = await p.evaluate(async ()=>{
+  const where = {};
+  for (const reg of Object.values(Region.REGIONS))
+    for (const g of reg.games) where[g.name] = reg.title;
+  Pixel.start();
+  const lit=[...document.querySelectorAll('.pcell.lit')].map(c=>+c.dataset.i);
+  await new Promise(r=>setTimeout(r,1000+lit.length*300+120));
+  const cells=[...document.querySelectorAll('.pcell')];
+  lit.forEach(i=>cells[i].click());
+  await new Promise(r=>setTimeout(r,400));
+  // 마지막 판까지 가지 않아도 결과 문구 틀은 같으므로 게임을 끝까지 돌린다
+  return { 등록:where['불빛 기억'] };
+});
+chk(label.등록==='측두엽', 'E12 불빛 기억은 측두엽 소속', JSON.stringify(label));
+chk(!(await p.evaluate(()=>document.documentElement.innerHTML.includes('후두엽'))),
+    'E13 없앤 후두엽이 문구에 남아 있지 않음');
+await p.evaluate(()=>goHome());
 await p.evaluate(()=>goHome());
 
 // ---- 불빛 기억 게임 ----

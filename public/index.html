@@ -1999,7 +1999,7 @@ const Flag = (() => {
 
 </script>
 <script>
-// 후두엽: 불빛 기억 - 잠깐 켜졌다 꺼진 칸을 그대로 짚기
+// 측두엽: 불빛 기억 - 잠깐 켜졌다 꺼진 칸을 그대로 짚기
 const Pixel = (() => {
   const SIZE = 5, TOTAL = 8;
   // 라운드마다 켜지는 칸 수. 두 판씩 같은 개수로 두어 적응할 틈을 준다
@@ -2114,7 +2114,7 @@ const Pixel = (() => {
   function finish() {
     showResult({
       score, max: TOTAL, gameKey: 'pixel',
-      detailHtml: `눈으로 본 것을 잠깐 붙잡아 두는 <b>시각 기억(후두엽)</b> 훈련이었어요.<br>` +
+      detailHtml: `눈으로 본 것을 잠깐 붙잡아 두는 <b>시각 작업기억(측두엽)</b> 훈련이었어요.<br>` +
         `켜진 칸이 ${COUNT[0]}개에서 ${COUNT[COUNT.length - 1]}개까지 늘어납니다.`,
       retryFn: start,
     });
