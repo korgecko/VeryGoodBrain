@@ -163,6 +163,22 @@ body {
 }
 .mcard.matched .mcard-front { border-color: var(--good); background: #f0fdf4; }
 
+/* ---------- 불빛 기억 ---------- */
+.pixel-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+  max-width: 380px; margin: 0 auto;
+}
+.pcell {
+  aspect-ratio: 1; border-radius: 10px; border: 2px solid var(--line);
+  background: var(--bg); padding: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-size: 1.3rem;
+}
+.pcell:disabled { cursor: default; }
+.pcell.lit    { background: #fbbf24; border-color: #d97706; }
+.pcell.hit    { background: var(--good); border-color: var(--good); color: #fff; }
+.pcell.miss   { background: var(--bad); border-color: var(--bad); color: #fff; }
+.pcell.reveal { background: #fde68a; border-color: #f59e0b; }
+
 /* ---------- 낱말 나누기 ---------- */
 .sort-stage { text-align: center; margin: 4px 0 10px; }
 .sort-mcard { width: 200px; aspect-ratio: 4/3; margin: 0 auto; }
@@ -320,6 +336,7 @@ body {
 .region-temporal { background: #ea580c; }
 .region-rfrontal { background: #0891b2; }
 .region-lfrontal { background: #16a34a; }
+.region-occipital { background: #db2777; }
 .mission-best { font-size: .9rem; color: var(--text-sub); margin-top: 6px; }
 .sub-title { margin-top: 26px; font-size: 1.05rem; color: var(--text-sub); }
 .mission-sub { padding: 14px 18px; }
@@ -572,6 +589,19 @@ body {
     <div id="flag-feedback-text" class="feedback-text">정답!</div>
     <div id="flag-feedback-answer" class="feedback-answer"></div>
   </div>
+</section>
+
+<!-- ===== 불빛 기억 ===== -->
+<section id="screen-pixel" class="screen">
+  <header class="game-header">
+    <button class="btn-back" onclick="goHome()">← 나가기</button>
+    <div class="game-title">불빛 기억</div>
+    <div class="game-stat"><span id="pixel-no">1</span>/8</div>
+  </header>
+  <div id="pixel-level-banner" class="level-banner">3칸</div>
+  <p class="game-guide" id="pixel-guide">불이 켜진 칸을 잘 보세요!</p>
+  <div id="pixel-grid" class="pixel-grid"></div>
+  <div id="pixel-feedback" class="inline-feedback"></div>
 </section>
 
 <!-- ===== 낱말 나누기 ===== -->
@@ -873,6 +903,14 @@ const Region = (() => {
         { icon: '🗂️', name: '낱말 나누기', how: '카드를 뒤집어 같은 종류끼리 모으세요', best: 'sort', start: () => Sort.start() },
       ],
     },
+    occipital: {
+      title: '후두엽', func: '시각·형태', color: '#db2777', cls: 'region-occipital',
+      short: '눈으로 본 것을 알아보고 잠깐 붙잡아 두는 힘',
+      desc: '머리 뒤쪽에 있는 후두엽은 눈으로 들어온 것을 알아보는 일을 해요. 모양과 색, 어디에 무엇이 있었는지를 순간적으로 붙잡아 두는 힘입니다.',
+      games: [
+        { icon: '🔲', name: '불빛 기억', how: '잠깐 켜졌다 꺼진 칸을 그대로 짚어보세요', best: 'pixel', start: () => Pixel.start() },
+      ],
+    },
     lfrontal: {
       title: '좌측 전두엽', func: '규칙 제어', color: '#16a34a', cls: 'region-lfrontal',
       short: '규칙을 지키고 헷갈리는 습관을 억누르는 힘',
@@ -890,8 +928,10 @@ const Region = (() => {
     rfrontal: 'M31 80 C 33 92, 41 100, 52 104 C 62 92, 78 84, 88 82 C 90 77, 92 71, 93 66 L 31 80 Z',
     parietal: 'M100 22 C 140 20, 172 40, 178 68 C 165 72, 150 78, 138 84 C 120 80, 104 80, 88 82 C 94 70, 98 48, 100 22 Z',
     temporal: 'M52 104 C 62 92, 78 84, 88 82 C 105 80, 122 82, 138 84 C 135 100, 118 112, 95 113 C 78 113, 62 111, 52 104 Z',
+    // 후두엽은 그림에만 있고 누를 수 없었다. 나머지 넷과 나란히 놓아 클릭 대상으로 만든다.
+    // 키 순서가 곧 그리는 순서라 전처럼 마지막에 둔다.
+    occipital: 'M178 68 C 182 85, 175 100, 160 106 C 150 108, 142 96, 138 84 C 150 78, 165 72, 178 68 Z',
   };
-  const OCCIPITAL = 'M178 68 C 182 85, 175 100, 160 106 C 150 108, 142 96, 138 84 C 150 78, 165 72, 178 68 Z';
 
   // 뇌주름. 큰 색 덩어리만 있으면 뇌가 아니라 조각난 원그래프처럼 보여서,
   // 각 부위의 바깥 곡선과 나란히 흐르는 선을 넣는다.
@@ -903,8 +943,8 @@ const Region = (() => {
                'M100 58 C 122 56, 142 66, 148 84'],
     rfrontal: ['M34 82 C 48 92, 66 86, 92 72', 'M38 92 C 52 99, 70 92, 90 80'],
     temporal: ['M56 100 C 76 92, 106 90, 136 90', 'M58 107 C 80 100, 108 98, 138 97'],
+    occipital: ['M144 78 C 158 75, 170 71, 181 70', 'M144 90 C 157 87, 168 83, 178 80'],
   };
-  const OCC_GYRI = ['M144 78 C 158 75, 170 71, 181 70', 'M144 90 C 157 87, 168 83, 178 80'];
   // 소뇌는 가로줄무늬가 특징
   const CEREBELLUM_LINES = [113, 118, 123];
 
@@ -915,10 +955,11 @@ const Region = (() => {
   const BRAIN_TF = 'translate(-38.4, 5.1) scale(1.948)'; // x 20~320, y 48~270에 놓임
   // 지시선 끝점은 각 부위 안쪽 지점을 위 변환에 넣어 구한 값
   const LABELS = {
-    lfrontal: { x: 8,   y: 22,  anchor: 'start', line: [46, 52, 88, 104] },
-    parietal: { x: 332, y: 22,  anchor: 'end',   line: [294, 52, 221, 108] },
-    rfrontal: { x: 8,   y: 298, anchor: 'start', line: [46, 272, 82, 171] },
-    temporal: { x: 332, y: 298, anchor: 'end',   line: [294, 272, 147, 194] },
+    lfrontal:  { x: 8,   y: 22,  anchor: 'start',  line: [46, 52, 88, 104] },
+    parietal:  { x: 332, y: 22,  anchor: 'end',    line: [294, 52, 221, 108] },
+    rfrontal:  { x: 8,   y: 298, anchor: 'start',  line: [46, 272, 82, 171] },
+    temporal:  { x: 200, y: 298, anchor: 'middle', dot: 158, line: [200, 272, 147, 194] },
+    occipital: { x: 332, y: 298, anchor: 'end',    line: [294, 272, 273, 176] },
   };
 
   let selected = null;
@@ -945,7 +986,6 @@ const Region = (() => {
   function brainBody(base, uid, active, clickable) {
     const clips = Object.keys(PARTS)
       .map(k => `<clipPath id="${uid}-${k}"><path d="${PARTS[k]}"/></clipPath>`).join('')
-      + `<clipPath id="${uid}-occ"><path d="${OCCIPITAL}"/></clipPath>`
       + `<clipPath id="${uid}-cb"><ellipse cx="163" cy="119" rx="21" ry="11"/></clipPath>`;
 
     const lobes = Object.keys(PARTS).map(k => {
@@ -958,8 +998,6 @@ const Region = (() => {
     return `
       <defs>${clips}</defs>
       ${lobes}
-      <path d="${OCCIPITAL}" fill="${base}" ${EDGE}/>
-      ${gyriGroup(`${uid}-occ`, OCC_GYRI, false, 'var(--text-sub)')}
       <ellipse cx="163" cy="119" rx="21" ry="11" fill="${base}" ${EDGE}/>
       <g clip-path="url(#${uid}-cb)" stroke="var(--text-sub)" stroke-opacity=".38"
          stroke-width="1.1" pointer-events="none">
@@ -974,10 +1012,12 @@ const Region = (() => {
     const labels = Object.keys(LABELS).map(key => {
       const L = LABELS[key], r = REGIONS[key];
       const active = selected === key;
-      const start = L.anchor === 'start';
-      const dotX = start ? L.x + 8 : L.x - 8;     // 라벨 바깥쪽에 영역 색 점
-      const textX = start ? L.x + 22 : L.x - 22;
-      const hitX = start ? L.x - 6 : L.x - 154;   // 글자만 누르기 어렵지 않도록 넓은 터치 영역
+      const start = L.anchor === 'start', mid = L.anchor === 'middle';
+      // 라벨 바깥쪽에 영역 색 점. 가운데 정렬은 글자 폭을 알 수 없어 위치를 직접 준다
+      const dotX = L.dot !== undefined ? L.dot : (start ? L.x + 8 : L.x - 8);
+      const textX = mid ? L.x : (start ? L.x + 22 : L.x - 22);
+      const hitX = mid ? L.x - 70 : (start ? L.x - 6 : L.x - 154); // 넓은 터치 영역
+      const hitW = mid ? 140 : 160;
       return `
         <line x1="${L.line[0]}" y1="${L.line[1]}" x2="${L.line[2]}" y2="${L.line[3]}"
               stroke="${active ? r.color : 'var(--text-sub)'}" stroke-width="${active ? 3 : 1.5}"
@@ -986,7 +1026,7 @@ const Region = (() => {
                 fill="${active ? 'var(--card)' : r.color}"
                 stroke="${active ? 'var(--card)' : 'var(--card)'}" stroke-width="2"/>
         <g data-region="${key}" style="cursor:pointer">
-          <rect x="${hitX}" y="${L.y - 24}" width="160" height="48" fill="transparent"/>
+          <rect x="${hitX}" y="${L.y - 24}" width="${hitW}" height="48" fill="transparent"/>
           <circle cx="${dotX}" cy="${L.y - 6}" r="${active ? 8 : 6}" fill="${r.color}"
                   fill-opacity="${active ? 1 : .45}"/>
           <text x="${textX}" y="${L.y}" text-anchor="${L.anchor}" font-size="20" font-weight="800"
@@ -1788,6 +1828,109 @@ const Flag = (() => {
   bindZone('zone-white', 'white');
 
   return { start, quit };
+})();
+
+</script>
+<script>
+// 후두엽: 불빛 기억 - 잠깐 켜졌다 꺼진 칸을 그대로 짚기
+const Pixel = (() => {
+  const SIZE = 5, TOTAL = 8;
+  // 라운드마다 켜지는 칸 수. 두 판씩 같은 개수로 두어 적응할 틈을 준다
+  const COUNT = [3, 3, 4, 4, 5, 5, 6, 6];
+  const showMs = n => 1000 + n * 300; // 많이 켜질수록 더 오래 보여준다
+
+  let no = 0, score = 0, streak = 0, sid = 0;
+  let lit = [], found = 0, lock = true;
+
+  function cells() { return [...document.querySelectorAll('#pixel-grid .pcell')]; }
+
+  function start() {
+    no = 0; score = 0; streak = 0;
+    sid = newSession();
+    const grid = document.getElementById('pixel-grid');
+    grid.innerHTML = '';
+    for (let i = 0; i < SIZE * SIZE; i++) {
+      const btn = document.createElement('button');
+      btn.className = 'pcell';
+      btn.dataset.i = i;
+      btn.onclick = () => tap(i, btn);
+      grid.appendChild(btn);
+    }
+    showScreen('screen-pixel');
+    next();
+  }
+
+  function next() {
+    no++;
+    if (no > TOTAL) return finish();
+    lock = true; found = 0;
+    const n = COUNT[no - 1];
+
+    document.getElementById('pixel-no').textContent = no;
+    document.getElementById('pixel-level-banner').textContent = `${n}칸`;
+    document.getElementById('pixel-feedback').textContent = '';
+    document.getElementById('pixel-guide').textContent = '불이 켜진 칸을 잘 보세요!';
+
+    const all = [...Array(SIZE * SIZE).keys()].sort(() => Math.random() - .5);
+    lit = all.slice(0, n);
+
+    const cs = cells();
+    cs.forEach(c => { c.className = 'pcell'; c.textContent = ''; c.disabled = true; });
+    lit.forEach(i => cs[i].classList.add('lit'));
+
+    // 보여준 뒤 끄고 입력을 받는다
+    gameTimeout(sid, () => {
+      cs.forEach(c => c.classList.remove('lit'));
+      document.getElementById('pixel-guide').textContent = `켜졌던 ${n}칸을 짚어보세요`;
+      cs.forEach(c => (c.disabled = false));
+      lock = false;
+    }, showMs(n));
+  }
+
+  function tap(i, btn) {
+    if (lock || btn.classList.contains('hit')) return;
+    const n = COUNT[no - 1];
+
+    if (lit.includes(i)) {
+      btn.classList.add('hit');
+      btn.textContent = '⭕';
+      found++;
+      if (found === n) return endRound(true);
+      return;
+    }
+    btn.classList.add('miss');
+    btn.textContent = '❌';
+    endRound(false);
+  }
+
+  function endRound(ok) {
+    lock = true;
+    const cs = cells();
+    cs.forEach(c => (c.disabled = true));
+    const fb = document.getElementById('pixel-feedback');
+    if (ok) {
+      score++; streak++;
+      Sound.correct(streak);
+      fb.innerHTML = `<span class="feedback-good">⭕ 정답!${streakText(streak)}</span>`;
+    } else {
+      streak = 0;
+      // 못 찾은 칸을 보여줘야 다음 판에 도움이 된다
+      lit.forEach(i => { if (!cs[i].classList.contains('hit')) cs[i].classList.add('reveal'); });
+      fb.innerHTML = '<span class="feedback-bad">❌ 아쉬워요! 노란 칸이 정답이에요</span>';
+    }
+    gameTimeout(sid, next, ok ? 800 : 1800);
+  }
+
+  function finish() {
+    showResult({
+      score, max: TOTAL, gameKey: 'pixel',
+      detailHtml: `눈으로 본 것을 잠깐 붙잡아 두는 <b>시각 기억(후두엽)</b> 훈련이었어요.<br>` +
+        `켜진 칸이 ${COUNT[0]}개에서 ${COUNT[COUNT.length - 1]}개까지 늘어납니다.`,
+      retryFn: start,
+    });
+  }
+
+  return { start };
 })();
 
 </script>
