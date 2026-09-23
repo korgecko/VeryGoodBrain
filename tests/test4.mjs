@@ -10,7 +10,7 @@ await p.addInitScript(() => {
   const orig = AC.prototype.createOscillator;
   AC.prototype.createOscillator = function () { window.__osc++; return orig.call(this); };
 });
-await p.goto('file:///home/user/tasks_prac/index.html');  // placeholder replaced below
+await p.goto(new URL('../public/index.html', import.meta.url).href);
 const pass=[],fail=[]; const chk=(c,n,x='')=>(c?pass:fail).push(n+(c?'':' :: '+x));
 const osc = () => p.evaluate(()=>window.__osc);
 const HEX={'rgb(220, 38, 38)':'빨강','rgb(37, 99, 235)':'파랑','rgb(147, 51, 234)':'보라','rgb(22, 163, 74)':'초록'};

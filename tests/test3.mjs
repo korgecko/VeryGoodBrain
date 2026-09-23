@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 const b = await chromium.launch(); const p = await b.newPage({viewport:{width:400,height:900}});
 const errs=[]; p.on('pageerror',e=>errs.push('PAGEERROR: '+e.message));
 p.on('console',m=>{ if(m.type()==='error' && !m.text().includes('Expected length')) errs.push('CONSOLE: '+m.text()); });
-await p.goto('file:///home/user/tasks_prac/index.html');
+await p.goto(new URL('../public/index.html', import.meta.url).href);
 const pass=[],fail=[]; const chk=(c,n,x='')=>(c?pass:fail).push(n+(c?'':' :: '+x));
 
 // 테스트가 스스로 정답을 알도록 표를 따로 들고 있는다 (게임 로직과 독립적으로 대조)

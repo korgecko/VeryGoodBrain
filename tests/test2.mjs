@@ -3,7 +3,7 @@ const b = await chromium.launch(); const p = await b.newPage();
 const errs = [];
 p.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
 p.on('console', m => { if (m.type()==='error' && !m.text().includes('Expected length')) errs.push('CONSOLE: '+m.text()); });
-await p.goto('file:///home/user/tasks_prac/index.html');
+await p.goto(new URL('../public/index.html', import.meta.url).href);
 const pass=[],fail=[]; const chk=(c,n,x='')=>(c?pass:fail).push(n+(c?'':' :: '+x));
 
 // ===== 출석 스탬프 =====
