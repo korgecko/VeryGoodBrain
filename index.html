@@ -156,6 +156,31 @@ body {
 }
 .mcard.matched .mcard-front { border-color: var(--good); background: #f0fdf4; }
 
+/* ---------- 낱말 나누기 ---------- */
+.sort-stage { text-align: center; margin: 4px 0 10px; }
+.sort-mcard { width: 200px; aspect-ratio: 4/3; margin: 0 auto; }
+.sort-word {
+  transform: rotateY(180deg); background: var(--card);
+  border: 3px solid var(--blue); color: var(--text);
+  font-size: 1.7rem; font-weight: bold; line-height: 1.3;
+  padding: 8px; text-align: center;
+}
+.sort-left { margin-top: 10px; font-size: .95rem; color: var(--text-sub); }
+.sort-left b { color: var(--text); font-size: 1.1rem; }
+.sort-bins { display: flex; gap: 8px; margin-top: 4px; }
+.sort-bin {
+  flex: 1; background: var(--card); border: 2px solid var(--line);
+  border-radius: 14px; padding: 10px 2px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.sort-bin:disabled { opacity: .45; }
+.sort-bin-emoji { font-size: 1.7rem; line-height: 1; }
+.sort-bin-label { font-size: .95rem; font-weight: bold; color: var(--text); }
+.sort-bin-count { font-size: .8rem; color: var(--text-sub); }
+.sort-bin.pop { border-color: var(--good); animation: sort-pop .35s ease; }
+.sort-bin.nope { border-color: var(--bad); }
+@keyframes sort-pop { 50% { transform: translateY(-7px) scale(1.06); } }
+
 /* ---------- 청기백기 ---------- */
 .level-banner {
   text-align: center; font-size: 1rem; font-weight: bold; color: #fff;
@@ -301,6 +326,8 @@ body {
   background: var(--card); border: 2px solid var(--line); border-radius: 20px;
   padding: 18px 24px; margin-bottom: 14px;
 }
+/* height는 SVG 속성으로 'auto'를 받지 못하므로 CSS에서 비율에 맞춘다 */
+.region-brain svg { display: block; width: 100%; height: auto; }
 .region-info { margin-bottom: 16px; }
 .region-badge {
   display: inline-block; color: #fff; border-radius: 999px;
@@ -536,6 +563,31 @@ body {
   </div>
 </section>
 
+<!-- ===== 낱말 나누기 ===== -->
+<section id="screen-sort" class="screen">
+  <header class="game-header">
+    <button class="btn-back" onclick="goHome()">← 나가기</button>
+    <div class="game-title">낱말 나누기</div>
+    <div class="game-stat"><span id="sort-no">1</span>/16</div>
+  </header>
+
+  <div id="sort-level-banner" class="level-banner">1단계</div>
+  <p class="game-guide" id="sort-guide">카드를 눌러 뒤집으세요</p>
+
+  <div class="sort-stage">
+    <button id="sort-card" class="mcard sort-mcard" onclick="Sort.flip()">
+      <div class="mcard-inner">
+        <div class="mcard-face mcard-back">🗂️</div>
+        <div class="mcard-face sort-word" id="sort-word"></div>
+      </div>
+    </button>
+    <div class="sort-left">남은 카드 <b id="sort-left">16</b>장</div>
+  </div>
+
+  <div id="sort-feedback" class="inline-feedback"></div>
+  <div id="sort-bins" class="sort-bins"></div>
+</section>
+
 <!-- ===== 언어 퀴즈 ===== -->
 <section id="screen-quiz" class="screen">
   <header class="game-header">
@@ -740,6 +792,7 @@ const Region = (() => {
       desc: '이마 오른쪽의 전두엽은 말과 글의 분위기, 상황의 맥락을 파악하는 일을 해요. 대화의 흐름을 읽고 알맞은 말을 고르는 힘입니다.',
       games: [
         { icon: '📖', name: '문맥 퀴즈', how: '글의 흐름에 맞는 답을 골라보세요', best: 'quiz', start: () => Quiz.start() },
+        { icon: '🗂️', name: '낱말 나누기', how: '카드를 뒤집어 같은 종류끼리 모으세요', best: 'sort', start: () => Sort.start() },
       ],
     },
     lfrontal: {
@@ -793,7 +846,7 @@ const Region = (() => {
         </g>`;
     }).join('');
     return `
-    <svg viewBox="0 0 340 235" width="100%" height="auto" aria-label="뇌 대시보드">
+    <svg viewBox="0 0 340 235" aria-label="뇌 대시보드">
       <g transform="translate(60,42)">
         ${parts}
         <path d="${OCCIPITAL}" fill="${base}" stroke="#fff" stroke-width="3"/>
@@ -812,7 +865,7 @@ const Region = (() => {
       `<path d="${PARTS[k]}" fill="${k === key ? REGIONS[key].color : base}" stroke="#fff" stroke-width="3"/>`
     ).join('');
     return `
-    <svg viewBox="0 0 220 150" width="100%" height="auto" aria-label="뇌 그림">
+    <svg viewBox="0 0 220 150" aria-label="뇌 그림">
       ${parts}
       <path d="${OCCIPITAL}" fill="${base}" stroke="#fff" stroke-width="3"/>
       <ellipse cx="163" cy="119" rx="21" ry="11" fill="${base}" stroke="#fff" stroke-width="3"/>
@@ -1594,6 +1647,195 @@ const Flag = (() => {
   bindZone('zone-white', 'white');
 
   return { start, quit };
+})();
+
+</script>
+<script>
+// 우측 전두엽: 낱말 나누기 - 카드를 뒤집어 같은 종류끼리 모으기
+// 카드마다 '주제'와 '문법 역할' 두 속성을 모두 갖고 있어서, 같은 카드 묶음으로
+// 두 가지 기준의 분류를 낼 수 있다. 3단계에서 그 기준이 도중에 바뀐다.
+const Sort = (() => {
+  const TOTAL = 16;
+  const STAGE2_FROM = 6, STAGE3_FROM = 11, SWITCH_AT = 14;
+
+  const THEMES = [
+    { key: 'animal',   label: '동물',    emoji: '🐶' },
+    { key: 'vehicle',  label: '탈 것',   emoji: '🚌' },
+    { key: 'hospital', label: '병원',    emoji: '🏥' },
+    { key: 'food',     label: '먹는 것', emoji: '🍎' },
+  ];
+  const ROLES = [
+    { key: 'noun', label: '이름',   emoji: '🏷️' },
+    { key: 'verb', label: '움직임', emoji: '🏃' },
+    { key: 'adj',  label: '꾸밈말', emoji: '✨' },
+  ];
+
+  // 카드에는 낱말만 적는다. 그림을 같이 넣으면 그림의 종류를 보고 고르게 되어
+  // 문법 역할로 나누는 2·3단계가 무너진다.
+  const CARDS = [
+    { word: '강아지',     theme: 'animal',   role: 'noun' },
+    { word: '고양이',     theme: 'animal',   role: 'noun' },
+    { word: '짖다',       theme: 'animal',   role: 'verb' },
+    { word: '뛰어놀다',   theme: 'animal',   role: 'verb' },
+    { word: '복슬복슬한', theme: 'animal',   role: 'adj'  },
+    { word: '포근한',     theme: 'animal',   role: 'adj'  },
+    { word: '버스',       theme: 'vehicle',  role: 'noun' },
+    { word: '자전거',     theme: 'vehicle',  role: 'noun' },
+    { word: '달리다',     theme: 'vehicle',  role: 'verb' },
+    { word: '멈추다',     theme: 'vehicle',  role: 'verb' },
+    { word: '빠른',       theme: 'vehicle',  role: 'adj'  },
+    { word: '시끄러운',   theme: 'vehicle',  role: 'adj'  },
+    { word: '의사',       theme: 'hospital', role: 'noun' },
+    { word: '주사',       theme: 'hospital', role: 'noun' },
+    { word: '진찰하다',   theme: 'hospital', role: 'verb' },
+    { word: '낫다',       theme: 'hospital', role: 'verb' },
+    { word: '따끔한',     theme: 'hospital', role: 'adj'  },
+    { word: '깨끗한',     theme: 'hospital', role: 'adj'  },
+    { word: '사과',       theme: 'food',     role: 'noun' },
+    { word: '국수',       theme: 'food',     role: 'noun' },
+    { word: '씹다',       theme: 'food',     role: 'verb' },
+    { word: '끓이다',     theme: 'food',     role: 'verb' },
+    { word: '달콤한',     theme: 'food',     role: 'adj'  },
+    { word: '뜨거운',     theme: 'food',     role: 'adj'  },
+  ];
+
+  let no = 0, score = 0, streak = 0, sid = 0;
+  let deck = [], card = null, mode = 'theme', prevMode = null;
+  let flipped = false, lock = false, counts = {};
+
+  const shuffle = arr => arr.map(v => ({ v, r: Math.random() }))
+    .sort((a, b) => a.r - b.r).map(x => x.v);
+
+  function stageOf(n) { return n < STAGE2_FROM ? 1 : n < STAGE3_FROM ? 2 : 3; }
+  // 1단계 종류 -> 2단계 쓰임 -> 3단계는 3장마다 다시 뒤집힌다.
+  // 3단계를 2단계와 같은 기준으로 시작하면 '3단계' 배너만 뜨고 아무것도 바뀌지
+  // 않는 구간이 생겨 오히려 헷갈린다. 항상 직전 단계의 반대로 시작한다.
+  function modeOf(n) {
+    if (stageOf(n) === 1) return 'theme';
+    if (stageOf(n) === 2) return 'role';
+    return n < SWITCH_AT ? 'theme' : 'role';
+  }
+
+  // 받침에 따라 조사를 고른다 ('은(는)', '(으)로' 같은 괄호 표기를 쓰지 않기 위해)
+  function jong(word) {
+    const c = word.charCodeAt(word.length - 1) - 0xAC00;
+    return (c >= 0 && c <= 11171) ? c % 28 : 0;
+  }
+  const eunNeun = w => (jong(w) ? '은' : '는');
+  const ro = w => (jong(w) === 0 || jong(w) === 8 ? '로' : '으로'); // ㄹ 받침은 '로'
+
+  const binsOf = m => (m === 'theme' ? THEMES : ROLES);
+  const answerOf = (c, m) => (m === 'theme' ? c.theme : c.role);
+  const binLabel = (key, m) => binsOf(m).find(b => b.key === key).label;
+
+  function start() {
+    no = 0; score = 0; streak = 0; prevMode = null;
+    sid = newSession();
+    deck = shuffle(CARDS).slice(0, TOTAL);
+    showScreen('screen-sort');
+    next();
+  }
+
+  function next() {
+    no++;
+    if (no > TOTAL) return finish();
+    lock = false; flipped = false;
+    card = deck[no - 1];
+    mode = modeOf(no);
+
+    document.getElementById('sort-no').textContent = no;
+    document.getElementById('sort-left').textContent = TOTAL - no + 1;
+    document.getElementById('sort-feedback').textContent = '';
+    document.getElementById('sort-level-banner').textContent = `${stageOf(no)}단계`;
+    document.getElementById('sort-guide').innerHTML = '카드를 눌러 뒤집으세요';
+
+    // 다음 카드는 '되돌아가는' 것이 아니라 새로 놓는 것이므로 회전 없이 즉시 엎는다.
+    // 애니메이션을 두면 되돌아가는 동안 이전 낱말이 잠깐 보인다.
+    const el = document.getElementById('sort-card'), inner = el.querySelector('.mcard-inner');
+    inner.style.transition = 'none';
+    el.classList.remove('flipped');
+    document.getElementById('sort-word').textContent = card.word;
+    void inner.offsetWidth;
+    inner.style.transition = '';
+
+    renderBins(prevMode !== mode); // 기준이 바뀌면 모아둔 장수도 새로 센다
+    // 기준이 바뀌는 순간은 반드시 알려준다 (예고 없이 바꾸면 시니어에겐 좌절감만 남는다)
+    if (prevMode && prevMode !== mode) {
+      document.getElementById('sort-feedback').innerHTML =
+        `<span class="feedback-notice">⚠️ 나누는 기준이 바뀌었어요!<br>` +
+        `이제 <b>${modeName(mode)}</b>${ro(modeName(mode))} 모으세요</span>`;
+    }
+    prevMode = mode;
+  }
+
+  const modeName = m => (m === 'theme' ? '종류' : '말의 쓰임');
+
+  function renderBins(reset) {
+    const list = binsOf(mode);
+    if (reset) { counts = {}; list.forEach(b => (counts[b.key] = 0)); }
+    const box = document.getElementById('sort-bins');
+    box.innerHTML = '';
+    list.forEach(b => {
+      const btn = document.createElement('button');
+      btn.className = 'sort-bin';
+      btn.disabled = true; // 카드를 뒤집기 전에는 고를 수 없다
+      btn.dataset.key = b.key;
+      btn.innerHTML = `
+        <div class="sort-bin-emoji">${b.emoji}</div>
+        <div class="sort-bin-label">${b.label}</div>
+        <div class="sort-bin-count">${counts[b.key] || 0}장</div>`;
+      btn.onclick = () => place(b.key, btn);
+      box.appendChild(btn);
+    });
+  }
+
+  function setBins(on) {
+    document.querySelectorAll('#sort-bins .sort-bin').forEach(b => (b.disabled = !on));
+  }
+
+  function flip() {
+    if (flipped || lock) return;
+    flipped = true;
+    document.getElementById('sort-card').classList.add('flipped');
+    document.getElementById('sort-guide').innerHTML =
+      `<b>${modeName(mode)}</b>에 맞는 곳에 넣으세요`;
+    setBins(true);
+  }
+
+  function place(key, btn) {
+    if (!flipped || lock) return;
+    lock = true;
+    setBins(false);
+
+    const right = answerOf(card, mode);
+    const ok = key === right;
+    const fb = document.getElementById('sort-feedback');
+    if (ok) {
+      score++; streak++;
+      counts[key] = (counts[key] || 0) + 1;
+      btn.classList.add('pop');
+      btn.querySelector('.sort-bin-count').textContent = counts[key] + '장';
+      fb.innerHTML = `<span class="feedback-good">⭕ 정답!${streakText(streak)}</span>`;
+    } else {
+      streak = 0;
+      btn.classList.add('nope');
+      fb.innerHTML =
+        `<span class="feedback-bad">❌ '${card.word}'${eunNeun(card.word)} ` +
+        `<b>${binLabel(right, mode)}</b>이에요</span>`;
+    }
+    gameTimeout(sid, next, ok ? 800 : 1700);
+  }
+
+  function finish() {
+    showResult({
+      score, max: TOTAL, gameKey: 'sort',
+      detailHtml: `낱말의 뜻과 쓰임을 갈라보는 <b>어휘 분류(우측 전두엽)</b> 훈련이었어요.<br>` +
+        `3단계에서 나누는 기준이 바뀔 때 머리를 바꿔 쓰는 힘이 가장 많이 쓰입니다.`,
+      retryFn: start,
+    });
+  }
+
+  return { start, flip };
 })();
 
 </script>
