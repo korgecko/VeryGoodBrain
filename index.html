@@ -240,6 +240,7 @@ body {
 .result-box h2 { font-size: 1.5rem; margin: 10px 0; }
 .result-score { font-size: 1.3rem; margin-bottom: 16px; }
 .result-score strong { color: var(--blue); font-size: 1.8rem; }
+.result-max { font-size: 1rem; color: var(--text-sub); }
 .result-detail {
   text-align: left; font-size: 1.05rem; line-height: 1.7; color: var(--text-sub);
   background: var(--bg); border-radius: 12px; padding: 14px; margin-bottom: 8px;
@@ -522,7 +523,7 @@ body {
     <div class="result-emoji" id="result-emoji">🎉</div>
     <h2 id="result-title">참 잘하셨어요!</h2>
     <div id="result-best" class="result-best hidden">🏆 최고 기록 갱신!</div>
-    <div class="result-score">획득 점수 <strong id="result-score">0</strong>점</div>
+    <div class="result-score">획득 점수 <strong id="result-score">0점</strong> <span id="result-max" class="result-max"></span></div>
     <div id="result-detail" class="result-detail"></div>
     <button class="btn-primary" onclick="goHome()">홈으로</button>
     <button class="btn-secondary" id="result-retry">다시 하기</button>
@@ -562,6 +563,15 @@ function renderBests() {
   });
 }
 
+// 게임 세션 토큰: 게임을 벗어나면 번호가 올라가고, 이전 세션에 예약된
+// 지연 실행(피드백 대기 등)은 무시된다. (나가기를 눌러도 화면이 되돌아오는 문제 방지)
+let sessionId = 0;
+function newSession() { return ++sessionId; }
+// 게임 안에서 쓰는 setTimeout: 세션이 바뀌었으면 실행하지 않는다
+function gameTimeout(sid, fn, ms) {
+  return setTimeout(() => { if (sid === sessionId) fn(); }, ms);
+}
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -569,6 +579,7 @@ function showScreen(id) {
 }
 
 function goHome() {
+  newSession(); // 진행 중이던 게임의 예약 동작을 모두 무효화
   showScreen('screen-home');
   renderPoints();
   renderBests();
@@ -589,7 +600,8 @@ function showResult({ score, max, detailHtml, retryFn, gameKey }) {
   document.getElementById('result-title').textContent =
     ratio >= 0.8 ? '참 잘하셨어요!' : ratio >= 0.5 ? '좋아요, 잘하고 있어요!' : '다음엔 더 잘할 수 있어요!';
   document.getElementById('result-best').classList.toggle('hidden', !isNewBest);
-  document.getElementById('result-score').textContent = `${score} / ${max}`;
+  document.getElementById('result-score').textContent = `${score}점`;
+  document.getElementById('result-max').textContent = `/ ${max}점 만점`;
   document.getElementById('result-detail').innerHTML = detailHtml || '';
   document.getElementById('result-retry').onclick = retryFn;
   addPoints(score);
@@ -618,7 +630,7 @@ const Region = (() => {
       desc: '귀 옆쪽에 있는 측두엽은 보고 들은 것을 기억하고, 방금 본 패턴을 빠르게 알아차리는 일을 해요. 사람 얼굴과 소리를 기억하는 힘입니다.',
       games: [
         { icon: '⚡', name: '같은 그림 판별', how: '직전 그림과 같은지 빠르게 ⭕/❌ 판단하세요', best: 'speed', start: () => Speed.start() },
-        { icon: '🧠', name: '카드 뒤집기', how: '같은 동물 카드 두 장의 짝을 찾으세요', best: 'memory', start: () => Memory.start() },
+        { icon: '🧠', name: '카드 뒤집기', how: '같은 동물 카드 두 장의 짝을 찾으세요', best: 'memory_flips', start: () => Memory.start() },
       ],
     },
     rfrontal: {
@@ -811,7 +823,38 @@ const Shape = (() => {
     return cells.map(([x, y]) => [mx - x, y]);
   }
 
-  let no = 0, score = 0, streak = 0, lock = false;
+  // 시계 방향 90도 회전 (SVG rotate(90)과 같은 방향: y축이 아래로 향함)
+  function rotate90(cells) {
+    const my = Math.max(...cells.map(c => c[1]));
+    return cells.map(([x, y]) => [my - y, x]);
+  }
+  // 위치를 원점으로 맞춘 뒤 문자열로: 같은 문자열이면 화면에 똑같이 보인다
+  function normalize(cells) {
+    const mx = Math.min(...cells.map(c => c[0])), my = Math.min(...cells.map(c => c[1]));
+    return cells.map(([x, y]) => [x - mx, y - my])
+      .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+      .map(c => c.join(',')).join(' ');
+  }
+  // 돌렸을 때 서로 다르게 보이는 각도만 추린다
+  // (예: S 모양은 180도 회전 대칭이라 [0, 90]만 남는다)
+  function distinctRotations(cells) {
+    const seen = new Set(), out = [];
+    let cur = cells;
+    for (const deg of [0, 90, 180, 270]) {
+      const key = normalize(cur);
+      if (!seen.has(key)) { seen.add(key); out.push(deg); }
+      cur = rotate90(cur);
+    }
+    return out;
+  }
+  // 회전을 고려한 대표형: 돌려서 겹치는 모양끼리는 같은 값을 갖는다
+  function canonical(cells) {
+    const forms = []; let cur = cells;
+    for (let i = 0; i < 4; i++) { forms.push(normalize(cur)); cur = rotate90(cur); }
+    return forms.sort()[0];
+  }
+
+  let no = 0, score = 0, streak = 0, lock = false, sid = 0;
   const rand = arr => arr[Math.floor(Math.random() * arr.length)];
 
   // 폴리오미노를 SVG로 그리기 (중앙 정렬 + 회전)
@@ -830,6 +873,7 @@ const Shape = (() => {
 
   function start() {
     no = 0; score = 0; streak = 0;
+    sid = newSession();
     showScreen('screen-shape');
     next();
   }
@@ -845,8 +889,10 @@ const Shape = (() => {
     const hard = no > EASY_ROUNDS;
     const answerKey = hard ? rand(CHIRAL) : rand(keys);
     const color = rand(COLORS);
-    const rotation = rand([90, 180, 270]);
     const cells = SHAPES[answerKey];
+    // 목표와 똑같아 보이는 각도는 빼고 고른다
+    // (S처럼 180도 대칭인 모양은 180도를 주면 안 돌린 것과 같아 보인다)
+    const rotation = rand(distinctRotations(cells).filter(d => d !== 0)) ?? 90;
 
     document.getElementById('shape-target').innerHTML =
       shapeSvg(cells, color, 0, 130);
@@ -854,24 +900,21 @@ const Shape = (() => {
       ? '⚠️ 조심! <b>뒤집힌(거울) 모양</b>은 정답이 아니에요. 돌려서 같아지는 것만 고르세요!'
       : '위의 모양을 <b>빙글 돌리면</b> 아래 중 어떤 것이 될까요?';
 
-    let choices;
-    if (hard) {
-      // 어려움: 정답 1 + 거울상 2(서로 다른 회전) + 다른 모양 1
-      const rots = [0, 90, 180, 270].sort(() => Math.random() - .5);
-      const other = rand(keys.filter(k => k !== answerKey));
-      choices = [
-        { cells, ok: true, rot: rotation },
-        { cells: mirror(cells), ok: false, rot: rots[0] },
-        { cells: mirror(cells), ok: false, rot: rots[1] },
-        { cells: SHAPES[other], ok: false, rot: rand([0, 90, 180, 270]) },
-      ];
-    } else {
-      // 쉬움: 정답 1 + 다른 모양 3
-      const others = keys.filter(k => k !== answerKey).sort(() => Math.random() - .5).slice(0, 3);
-      choices = [
-        { cells, ok: true, rot: rotation },
-        ...others.map(k => ({ cells: SHAPES[k], ok: false, rot: rand([0, 90, 180, 270]) })),
-      ];
+    const mir = mirror(cells);
+    // 거울상이 회전만으로 원본과 겹치면 함정이 성립하지 않는다(정답이 2개가 됨)
+    const mirrorIsTrap = hard && canonical(mir) !== canonical(cells);
+
+    const choices = [{ cells, ok: true, rot: rotation }];
+    if (mirrorIsTrap) {
+      // 어려움: 정답 1 + 거울상 2(서로 다르게 보이는 회전만) + 다른 모양으로 채우기
+      distinctRotations(mir).sort(() => Math.random() - .5).slice(0, 2)
+        .forEach(rot => choices.push({ cells: mir, ok: false, rot }));
+    }
+    // 남은 자리는 서로 겹치지 않는 다른 모양으로 채운다
+    const others = keys.filter(k => k !== answerKey).sort(() => Math.random() - .5);
+    while (choices.length < 4) {
+      const k = others.pop();
+      choices.push({ cells: SHAPES[k], ok: false, rot: rand(distinctRotations(SHAPES[k])) });
     }
     choices.sort(() => Math.random() - .5);
 
@@ -899,7 +942,7 @@ const Shape = (() => {
       btn.classList.add('choice-bad');
       fb.innerHTML = '<span class="feedback-bad">❌ 아쉬워요!</span>';
     }
-    setTimeout(next, ok ? 900 : 1400);
+    gameTimeout(sid, next, ok ? 900 : 1400);
   }
 
   function finish() {
@@ -920,11 +963,12 @@ const Speed = (() => {
   const TOTAL = 10;
   const SYMBOLS = ['🍎', '🍌', '🍇', '🍊'];
 
-  let no = 0, score = 0, streak = 0, prev = null, current = null, lock = false;
+  let no = 0, score = 0, streak = 0, prev = null, current = null, lock = false, sid = 0;
   const rand = arr => arr[Math.floor(Math.random() * arr.length)];
 
   function start() {
     no = 0; score = 0; streak = 0; lock = false;
+    sid = newSession();
     prev = null;
     current = rand(SYMBOLS);
     document.getElementById('speed-no').textContent = '0';
@@ -973,7 +1017,7 @@ const Speed = (() => {
       streak = 0;
       fb.innerHTML = `<span class="feedback-bad">❌ 아쉬워요! (직전 그림: ${prev})</span>`;
     }
-    setTimeout(nextCard, ok ? 700 : 1500);
+    gameTimeout(sid, nextCard, ok ? 700 : 1500);
   }
 
   function quit() { goHome(); }
@@ -1001,11 +1045,12 @@ const Stroop = (() => {
     { name: '초록', hex: '#16a34a' },
   ];
 
-  let no = 0, score = 0, streak = 0, isMatch = false, lock = false;
+  let no = 0, score = 0, streak = 0, isMatch = false, lock = false, sid = 0;
   const rand = arr => arr[Math.floor(Math.random() * arr.length)];
 
   function start() {
     no = 0; score = 0; streak = 0;
+    sid = newSession();
     showScreen('screen-stroop');
     next();
   }
@@ -1039,7 +1084,7 @@ const Stroop = (() => {
       streak = 0;
       fb.innerHTML = `<span class="feedback-bad">❌ 아쉬워요! ${isMatch ? '뜻과 색이 같았어요' : '뜻과 색이 달랐어요'}</span>`;
     }
-    setTimeout(next, ok ? 700 : 1500);
+    gameTimeout(sid, next, ok ? 700 : 1500);
   }
 
   function finish() {
@@ -1059,10 +1104,16 @@ const Stroop = (() => {
 // 미션 1: 기억력 카드 뒤집기 (동물 짝 맞추기)
 const Memory = (() => {
   const ANIMALS = ['🐶', '🐱', '🐰', '🐦', '🐢', '🐠'];
-  let first = null, lock = false, matched = 0, tries = 0;
+  const PAIRS = ANIMALS.length;      // 6쌍
+  const PERFECT = PAIRS * 2;         // 한 번도 헛뒤집지 않으면 12번
+  let first = null, lock = false, matched = 0, tries = 0, sid = 0;
+
+  // 적게 뒤집을수록 높은 점수 (12번=만점 12점, 한 번 더 뒤집을 때마다 1점 감점, 최저 1점)
+  function flipScore() { return Math.max(1, PERFECT - (tries - PERFECT)); }
 
   function start() {
     matched = 0; tries = 0; first = null; lock = false;
+    sid = newSession();
     document.getElementById('memory-score').textContent = '0';
     document.getElementById('memory-tries').textContent = '0';
 
@@ -1101,10 +1152,10 @@ const Memory = (() => {
       a.classList.add('matched'); b.classList.add('matched');
       matched++;
       document.getElementById('memory-score').textContent = matched;
-      if (matched === ANIMALS.length) setTimeout(finish, 600);
+      if (matched === PAIRS) gameTimeout(sid, finish, 600);
     } else {
       lock = true;
-      setTimeout(() => {
+      gameTimeout(sid, () => {
         a.classList.remove('flipped');
         b.classList.remove('flipped');
         lock = false;
@@ -1113,12 +1164,13 @@ const Memory = (() => {
   }
 
   function finish() {
+    // 짝을 다 맞춰야만 끝나므로 맞춘 쌍(항상 6)이 아니라 뒤집은 횟수로 채점한다
     showResult({
-      score: matched,
-      max: ANIMALS.length,
-      gameKey: 'memory',
+      score: flipScore(),
+      max: PERFECT,
+      gameKey: 'memory_flips',
       detailHtml: `총 <b>${tries}번</b> 뒤집어서 ${matched}쌍을 모두 찾으셨어요!<br>` +
-        `뒤집은 횟수가 적을수록 기억력이 좋다는 뜻이에요.`,
+        `가장 적게 뒤집으면 <b>${PERFECT}번</b>이에요. 적게 뒤집을수록 점수가 높아요.`,
       retryFn: start,
     });
   }
@@ -1138,7 +1190,8 @@ const Flag = (() => {
   let round = 0, score = 0, history = [];
   let state = { blue: 'neutral', white: 'neutral' };
   let target = null, command = '';
-  let timer = null, earlyTimer = null, tickTimer = null, roundActive = false;
+  let timer = null, earlyTimer = null, tickTimer = null;
+  let readyTimer = null, endTimer = null, roundActive = false, sid = 0;
 
   const rand = arr => arr[Math.floor(Math.random() * arr.length)];
   const NAME = { blue: '청기', white: '백기' };
@@ -1196,12 +1249,14 @@ const Flag = (() => {
 
   function start() {
     round = 0; score = 0; history = [];
+    sid = newSession();
     showScreen('screen-flag');
     nextRound();
   }
 
   function quit() {
     clearTimeout(timer); clearTimeout(earlyTimer); clearInterval(tickTimer);
+    clearTimeout(readyTimer); clearTimeout(endTimer);
     roundActive = false;
     document.getElementById('flag-feedback').classList.add('hidden');
     goHome();
@@ -1232,7 +1287,7 @@ const Flag = (() => {
     num.textContent = Math.round(LEVEL_TIME[level] / 1000) + '초';
 
     // 잠깐 "준비..." 후 지시 표시
-    setTimeout(() => {
+    readyTimer = gameTimeout(sid, () => {
       document.getElementById('flag-command').innerHTML = commandHtml(command);
       roundActive = true;
       const ms = LEVEL_TIME[level];
@@ -1245,11 +1300,12 @@ const Flag = (() => {
       const endAt = Date.now() + ms;
       clearInterval(tickTimer);
       tickTimer = setInterval(() => {
+        if (!roundActive) { clearInterval(tickTimer); return; }
         const left = Math.max(0, endAt - Date.now());
         num.textContent = Math.ceil(left / 1000) + '초';
         if (left <= 3000) { num.classList.add('low'); bar.classList.add('low'); }
       }, 200);
-      timer = setTimeout(evaluate, ms);
+      timer = gameTimeout(sid, evaluate, ms);
     }, 800);
   }
 
@@ -1314,7 +1370,7 @@ const Flag = (() => {
     state = { ...target };
     renderFlags();
 
-    setTimeout(() => {
+    endTimer = gameTimeout(sid, () => {
       fb.classList.add('hidden');
       nextRound();
     }, ok ? 1300 : 2200);
