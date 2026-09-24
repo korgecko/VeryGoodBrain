@@ -480,6 +480,36 @@ body {
   min-height: 46px; margin-top: 14px;
 }
 
+/* ---------- 칠판 비교 ----------
+   칠판은 밝은·어두운 화면과 상관없이 늘 초록 칠판에 흰 분필 (분필 #f8fafc / 칠판 #1f4d3a = 9.9:1) */
+.chalk-boards { display: flex; gap: 10px; margin: 6px 0 14px; }
+.chalk-board {
+  flex: 1 1 0; min-width: 0; min-height: 9.5rem; position: relative;
+  background: #1f4d3a; border: 6px solid #8b5a2b; border-radius: 10px;
+  color: #f8fafc; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 8px 4px; user-select: none;
+}
+.chalk-board svg { width: 100%; max-width: 9rem; height: auto; display: block; }
+.chalk-board svg circle { fill: #f8fafc; }
+.chalk-expr { font-size: 2rem; font-weight: 800; text-align: center; line-height: 1.25; }
+.chalk-expr span { white-space: nowrap; }
+.chalk-val {
+  position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%);
+  background: #1f4d3a; border-radius: 8px; padding: 0 8px; white-space: nowrap;
+  font-size: 1.15rem; font-weight: 800; color: #fde68a; font-variant-numeric: tabular-nums;
+}
+.chalk-val:empty { display: none; }
+/* 점 칠판은 개수를 알려줄 때 점을 가리지 않도록 아래에 자리를 미리 비워둔다 */
+.chalk-board.dots .chalk-val { position: static; transform: none; display: block; min-height: 1.45em; padding: 0; }
+.chalk-board.win { border-color: #f59e0b; box-shadow: 0 0 0 3px #f59e0b; }
+.chalk-buttons { display: flex; gap: 8px; }
+.btn-chalk {
+  background: var(--blue); padding: 12px 2px; font-size: 1.2rem; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; line-height: 1.2;
+}
+.btn-chalk .arr { font-size: 1.1rem; }
+.btn-chalk-eq { background: #475569; }
+
 /* ---------- 같은 그림 판별 / 색깔 글자 ---------- */
 .speed-card {
   font-size: 7rem; text-align: center; padding: 30px 0;
@@ -561,6 +591,32 @@ body {
   <div id="shape-target" class="shape-target"></div>
   <div id="shape-choices" class="shape-choices"></div>
   <div id="shape-feedback" class="inline-feedback"></div>
+</section>
+
+<!-- ===== 두정엽: 칠판 비교 ===== -->
+<section id="screen-chalk" class="screen">
+  <header class="game-header">
+    <button class="btn-back" onclick="Chalk.quit()">← 나가기</button>
+    <div class="game-title">칠판 비교</div>
+    <div class="game-stat"><span id="chalk-no">1</span>/12</div>
+  </header>
+  <div id="chalk-level-banner" class="level-banner">1단계</div>
+  <p class="game-guide" id="chalk-guide">어느 칠판의 <b>점이 더 많은가요?</b></p>
+  <div class="timer-row">
+    <span class="timer-label">⏱ 남은 시간</span>
+    <div class="timer-track"><div id="chalk-timer" class="timer-bar"></div></div>
+    <span id="chalk-timer-num" class="timer-num">8초</span>
+  </div>
+  <div class="chalk-boards">
+    <div class="chalk-board" id="chalk-left"></div>
+    <div class="chalk-board" id="chalk-right"></div>
+  </div>
+  <div class="chalk-buttons">
+    <button class="btn-big btn-chalk" data-pick="L" onclick="Chalk.answer('L')"><span class="arr" aria-hidden="true">◀</span>왼쪽</button>
+    <button class="btn-big btn-chalk btn-chalk-eq" data-pick="=" onclick="Chalk.answer('=')"><span class="arr" aria-hidden="true">=</span>같아요</button>
+    <button class="btn-big btn-chalk" data-pick="R" onclick="Chalk.answer('R')"><span class="arr" aria-hidden="true">▶</span>오른쪽</button>
+  </div>
+  <div id="chalk-feedback" class="inline-feedback"></div>
 </section>
 
 <!-- ===== 측두엽: 같은 그림 판별 ===== -->
@@ -1431,6 +1487,7 @@ const Region = (() => {
       desc: '머리 윗부분에 있는 두정엽은 공간을 파악하고, 사물의 위치와 모양을 머릿속으로 그려보는 일을 해요. 길 찾기, 퍼즐 맞추기가 이 영역의 힘입니다.',
       games: [
         { icon: '🧩', name: '모양 맞추기', how: '모양을 머릿속으로 돌려서 같은 것을 고르세요', best: 'shape', start: () => Shape.start() },
+        { icon: '🧮', name: '칠판 비교', how: '두 칠판 중 어느 쪽이 더 큰지 고르세요', best: 'chalk', start: () => Chalk.start() },
       ],
     },
     temporal: {
@@ -1726,6 +1783,184 @@ const Shape = (() => {
   return { start };
 })();
 
+</script>
+<script>
+// 두정엽: 칠판 비교 - 두 칠판의 크기(점 개수 → 덧셈·뺄셈 → 곱셈)를 비교한다.
+// 수의 크기를 머릿속 '수직선'에 놓고 비교하는 일은 두정엽(두정엽 속 고랑)이 맡는다.
+const Chalk = (() => {
+  const TOTAL = 12;
+  const LIMIT = 8000;            // 문제당 제한시간
+  const LEVEL = no => no <= 4 ? 1 : no <= 8 ? 2 : 3;
+  const GUIDE = {
+    1: '어느 칠판의 <b>점이 더 많은가요?</b>',
+    2: '계산해서 <b>더 큰 쪽</b>을 고르세요',
+    3: '곱셈도 나와요! <b>더 큰 쪽</b>은?',
+  };
+
+  let no = 0, score = 0, streak = 0, lock = false, sid = 0, q = null;
+  let limitTimer = null, tickTimer = null;
+  const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));   // a 이상 b 이하
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+  // 값 v 를 나타내는 식. 곱셈을 허용하면 v 가 두 한 자리 수의 곱일 때 곱셈을 우선 쓴다
+  function mulsOf(v) {
+    const out = [];
+    for (let a = 2; a <= 9; a++) if (v % a === 0 && v / a >= a && v / a <= 9) out.push(`${a} × ${v / a}`);
+    return out;
+  }
+  function exprFor(v, mul) {
+    const muls = mul ? mulsOf(v) : [];
+    if (muls.length && Math.random() < 0.7) return pick(muls);
+    if (Math.random() < 0.5 && v >= 3) { const x = ri(1, v - 1); return `${x} + ${v - x}`; }
+    const y = ri(1, 9); return `${v + y} − ${y}`;
+  }
+
+  // 두 값: 약 4분의 1은 같게, 나머지는 1~3 차이 (차이가 작을수록 어렵다)
+  function pair(lo, hi) {
+    const a = ri(lo, hi);
+    if (Math.random() < 0.25) return [a, a];
+    let b; do { b = a + pick([-3, -2, -1, 1, 2, 3]); } while (b < lo - 1 || b > hi + 1 || b === a);
+    return Math.random() < 0.5 ? [a, b] : [b, a];
+  }
+
+  function makeQuestion(level) {
+    if (level === 1) {
+      const [a, b] = pair(4, 11);
+      return { kind: 'dots', a, b };
+    }
+    if (level === 2) {
+      const [a, b] = pair(6, 17);
+      let ea, eb;
+      do { ea = exprFor(a, false); eb = exprFor(b, false); } while (ea === eb);
+      return { kind: 'expr', a, b, ea, eb };
+    }
+    // 3단계: 한쪽은 곱셈, 다른 쪽은 곱셈이거나 덧셈·뺄셈
+    const products = [];
+    for (let x = 2; x <= 9; x++) for (let y = x; y <= 9; y++) if (x * y <= 40) products.push(x * y);
+    const a = pick(products);
+    const b = Math.random() < 0.25 ? a : a + pick([-3, -2, -1, 1, 2, 3]);
+    const ea = pick(mulsOf(a));
+    let eb;
+    for (let i = 0; i < 20; i++) { eb = exprFor(b, true); if (eb !== ea) break; }
+    return Math.random() < 0.5 ? { kind: 'expr', a, b, ea, eb } : { kind: 'expr', a: b, b: a, ea: eb, eb: ea };
+  }
+
+  // 점은 4×4 칸에 하나씩, 칸 안에서 조금씩 흔들어 놓아 줄 세워 세기 어렵게 한다
+  function dotsSvg(n) {
+    const cells = [...Array(16).keys()].sort(() => Math.random() - 0.5).slice(0, n);
+    const dots = cells.map(c => {
+      const cx = 14 + (c % 4) * 24 + ri(-5, 5), cy = 14 + Math.floor(c / 4) * 24 + ri(-5, 5);
+      return `<circle cx="${cx}" cy="${cy}" r="6.5"/>`;
+    }).join('');
+    return `<svg viewBox="0 0 100 100" role="img" aria-label="점 ${n}개">${dots}</svg>`;
+  }
+  const exprHtml = e => `<div class="chalk-expr">${e.split(' ').map(t => `<span>${t}</span>`).join(' ')}</div>`;
+
+  function start() {
+    no = 0; score = 0; streak = 0; lock = false;
+    sid = newSession();
+    showScreen('screen-chalk');
+    next();
+  }
+
+  function setButtons(on) { document.querySelectorAll('#screen-chalk .btn-chalk').forEach(b => (b.disabled = !on)); }
+
+  function next() {
+    no++;
+    if (no > TOTAL) return finish();
+    lock = false;
+    const level = LEVEL(no);
+    q = makeQuestion(level);
+    document.getElementById('chalk-no').textContent = no;
+    document.getElementById('chalk-level-banner').textContent = `${level}단계`;
+    document.getElementById('chalk-guide').innerHTML = GUIDE[level];
+    const fb = document.getElementById('chalk-feedback');
+    fb.textContent = '';
+    if (level > 1 && LEVEL(no - 1) !== level) {
+      fb.innerHTML = `<span class="feedback-notice">⬆ ${level}단계! ${level === 2 ? '이제 식을 계산해 비교해요' : '곱셈이 나와요'}</span>`;
+    }
+    for (const [id, v, e] of [['chalk-left', q.a, q.ea], ['chalk-right', q.b, q.eb]]) {
+      const el = document.getElementById(id);
+      el.classList.remove('win');
+      el.classList.toggle('dots', q.kind === 'dots');
+      el.innerHTML = (q.kind === 'dots' ? dotsSvg(v) : exprHtml(e)) + '<div class="chalk-val"></div>';
+    }
+    setButtons(true);
+    startTimer();
+  }
+
+  function startTimer() {
+    const bar = document.getElementById('chalk-timer'), num = document.getElementById('chalk-timer-num');
+    bar.classList.remove('running', 'low'); num.classList.remove('low');
+    bar.style.transitionDuration = '0ms'; bar.style.width = '100%';
+    num.textContent = LIMIT / 1000 + '초';
+    void bar.offsetWidth;   // 강제로 한 번 계산시켜야 막대가 실제로 줄어든다
+    bar.classList.add('running');
+    bar.style.transitionDuration = LIMIT + 'ms'; bar.style.width = '0%';
+    const endAt = Date.now() + LIMIT;
+    clearInterval(tickTimer);
+    tickTimer = setInterval(() => {
+      const left = Math.max(0, endAt - Date.now());
+      num.textContent = Math.ceil(left / 1000) + '초';
+      if (left <= 2000) { num.classList.add('low'); bar.classList.add('low'); }
+    }, 100);
+    limitTimer = gameTimeout(sid, () => judge(null), LIMIT);
+  }
+
+  function stopTimer() {
+    clearTimeout(limitTimer); clearInterval(tickTimer);
+    const bar = document.getElementById('chalk-timer');
+    bar.classList.remove('running'); bar.style.transitionDuration = '0ms'; bar.style.width = '100%';
+  }
+
+  const truth = () => (q.a > q.b ? 'L' : q.a < q.b ? 'R' : '=');
+
+  // 답을 맞히든 틀리든 두 칠판의 값을 보여줘 스스로 확인하게 한다
+  function reveal() {
+    const t = truth();
+    const unit = q.kind === 'dots' ? '개' : '';
+    document.querySelector('#chalk-left .chalk-val').textContent = (q.kind === 'dots' ? '' : '= ') + q.a + unit;
+    document.querySelector('#chalk-right .chalk-val').textContent = (q.kind === 'dots' ? '' : '= ') + q.b + unit;
+    if (t === 'L') document.getElementById('chalk-left').classList.add('win');
+    if (t === 'R') document.getElementById('chalk-right').classList.add('win');
+    return t === 'L' ? '왼쪽이 더 커요' : t === 'R' ? '오른쪽이 더 커요' : '둘이 같아요';
+  }
+
+  function judge(said) {
+    if (lock) return;
+    lock = true;
+    setButtons(false);
+    stopTimer();
+    const why = reveal();
+    const fb = document.getElementById('chalk-feedback');
+    const ok = said === truth();
+    if (ok) {
+      score++; streak++;
+      Sound.correct(streak);
+      fb.innerHTML = `<span class="feedback-good">⭕ 정답!${streakText(streak)}</span>`;
+    } else {
+      streak = 0;
+      fb.innerHTML = `<span class="feedback-bad">${said === null ? '⏰ 시간이 지났어요!' : '❌ 아쉬워요!'} ${why}</span>`;
+    }
+    gameTimeout(sid, next, ok ? 1100 : 2000);
+  }
+
+  function answer(side) { judge(side); }
+  function quit() { stopTimer(); goHome(); }
+
+  function finish() {
+    stopTimer();
+    showResult({
+      score, max: TOTAL, gameKey: 'chalk',
+      detailHtml: `수의 크기를 머릿속 수직선에 놓고 비교하는 <b>수 감각(두정엽)</b> 훈련이었어요.<br>` +
+        `점 세기 → 덧셈·뺄셈 → 곱셈 순서로 조금씩 어려워져요.`,
+      retryFn: start,
+    });
+  }
+
+  // 테스트에서 문제를 들여다볼 수 있게 현재 문제만 읽기 전용으로 내놓는다
+  return { start, answer, quit, get q() { return q && { ...q }; } };
+})();
 </script>
 <script>
 // 측두엽: 같은 그림 판별 (Speed Match) - 직전 그림과 같은지 판단
