@@ -1162,20 +1162,42 @@ const Brain3D = (() => {
     v.dpr = dpr;
   }
 
+  // 마지막으로 만진 뒤 이만큼 지나면 자전과 다시 그리기를 멈춘다.
+  // 가만히 둬도 초당 60번씩 다시 그리면 휴대폰 배터리를 계속 먹는다
+  const REST_MS = 25000;
+
+  function wake(v) {
+    v.awake = performance.now();
+    if (!raf) raf = requestAnimationFrame(loop);
+  }
+  const wakeAll = () => views.forEach(wake);
+
   function loop(t) {
-    raf = requestAnimationFrame(loop);
+    let busy = false;
     for (const v of views) {
-      if (!v.canvas.offsetParent) continue;            // 안 보이는 화면은 그리지 않는다
-      if (v.canvas.clientWidth && v.canvas.width !== Math.round(v.canvas.clientWidth * v.dpr)) resize(v);
-      if (!v.drag && t - v.touched > 2500) v.yaw += 0.0012;   // 손을 떼면 아주 천천히 돈다
-      draw(v, t);
+      // 다른 화면에 가려졌거나 스크롤로 화면 밖에 있으면 그리지 않는다
+      if (!v.canvas.offsetParent || v.inView === false) continue;
+      if (v.canvas.clientWidth && v.canvas.width !== Math.round(v.canvas.clientWidth * v.dpr)) {
+        resize(v); v.dirty = true;
+      }
+      if (v.drag || t - v.awake < REST_MS) {
+        if (!v.drag && t - v.touched > 2500) v.yaw += 0.0012;   // 손을 떼면 아주 천천히 돈다
+        draw(v, t);
+        busy = true;
+      } else if (v.dirty) {
+        draw(v, t);                                 // 쉬는 중이라도 바뀐 게 있으면 한 번만
+      }
+      v.dirty = false;
     }
+    // 그릴 게 없으면 루프 자체를 멈춘다. 만지거나 화면이 바뀌면 wake 가 다시 켠다
+    raf = busy ? requestAnimationFrame(loop) : 0;
   }
 
   function bind(v, onPick) {
     const c = v.canvas;
     let sx = 0, sy = 0, downX = 0, downY = 0;
     c.addEventListener('pointerdown', e => {
+      wake(v);
       v.drag = true; sx = downX = e.clientX; sy = downY = e.clientY;
       v.touched = performance.now();
       try { c.setPointerCapture(e.pointerId); } catch {}
@@ -1194,7 +1216,7 @@ const Brain3D = (() => {
     });
     const up = e => {
       if (!v.drag) return;
-      v.drag = false; v.touched = performance.now();
+      v.drag = false; v.touched = performance.now(); wake(v);
       // 누른 자리에서 얼마나 벗어났는지로 판단한다. 움직인 거리를 더해 나가면
       // 손가락이 제자리에서 떨리기만 해도 합이 커져 탭이 드래그로 묻힌다
       const away = Math.hypot((e.clientX ?? downX) - downX, (e.clientY ?? downY) - downY);
@@ -1241,12 +1263,23 @@ const Brain3D = (() => {
       views.push(v);
       resize(v);
       bind(v, opts.onPick);
-      if (!raf) raf = requestAnimationFrame(loop);
+      // 스크롤로 화면 밖에 나가면 쉬고, 다시 들어오면 깨운다
+      if ('IntersectionObserver' in window) {
+        new IntersectionObserver(es => es.forEach(e => {
+          v.inView = e.isIntersecting;
+          if (v.inView) wake(v);
+        })).observe(canvas);
+      }
     }
+    wake(v);
     return v;
   }
 
-  const select = key => { sel = key || null; };
+  const select = key => { sel = key || null; wakeAll(); };
+
+  // 창 크기가 바뀌거나 다른 앱에 갔다 돌아오면 다시 그린다
+  window.addEventListener('resize', wakeAll);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) wakeAll(); });
 
   return { mount, select, pickAt };
 })();
