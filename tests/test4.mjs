@@ -21,7 +21,7 @@ await p.addInitScript(() => {
 await p.goto(new URL('../public/index.html', import.meta.url).href);
 const pass=[],fail=[]; const chk=(c,n,x='')=>(c?pass:fail).push(n+(c?'':' :: '+x));
 const osc = () => p.evaluate(()=>window.__osc);
-const HEX={'rgb(220, 38, 38)':'빨강','rgb(37, 99, 235)':'파랑','rgb(147, 51, 234)':'보라','rgb(22, 163, 74)':'초록'};
+const HEX={'rgb(153, 27, 27)':'빨강','rgb(30, 64, 175)':'파랑','rgb(168, 85, 247)':'보라','rgb(22, 163, 74)':'초록'};
 const TABLE={강아지:['animal','noun'],고양이:['animal','noun'],짖다:['animal','verb'],뛰어놀다:['animal','verb'],
 복슬복슬한:['animal','adj'],포근한:['animal','adj'],버스:['vehicle','noun'],자전거:['vehicle','noun'],
 달리다:['vehicle','verb'],멈추다:['vehicle','verb'],빠른:['vehicle','adj'],시끄러운:['vehicle','adj'],

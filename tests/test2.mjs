@@ -72,7 +72,7 @@ chk(sp==='2', 'S5 시간 초과 후 다음 문제로', sp);
 await p.evaluate(() => Speed.quit());
 
 // ===== 색깔 글자: 2단계 규칙 =====
-const HEX = { 'rgb(220, 38, 38)':'빨강','rgb(37, 99, 235)':'파랑','rgb(147, 51, 234)':'보라','rgb(22, 163, 74)':'초록' };
+const HEX = { 'rgb(153, 27, 27)':'빨강','rgb(30, 64, 175)':'파랑','rgb(168, 85, 247)':'보라','rgb(22, 163, 74)':'초록' };
 const stroop = await p.evaluate(async (HEX) => {
   const log=[]; Stroop.start();
   let prevWord=null;
