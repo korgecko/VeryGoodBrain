@@ -4,7 +4,7 @@
   "type": "module",
   "description": "베리굿브레인 브라우저 검증 스크립트. tests/ 안에서 npm install 후 npm test",
   "scripts": {
-    "test": "node test.mjs && node test2.mjs && node test3.mjs && node test4.mjs && node test5.mjs && node test6.mjs && node test7.mjs && node test8.mjs && node test9.mjs && node test10.mjs && node flagtest.mjs"
+    "test": "node test.mjs && node test2.mjs && node test3.mjs && node test4.mjs && node test5.mjs && node test6.mjs && node test7.mjs && node test8.mjs && node test9.mjs && node test10.mjs && node test11.mjs && node flagtest.mjs"
   },
   "devDependencies": {
     "playwright": "^1.56.1"

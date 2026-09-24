@@ -6,6 +6,7 @@ const SCREENS = {
   결과: "showResult({score:7,max:10,gameKey:null,detailHtml:'설명 <b>굵게</b>',retryFn:()=>{}})",
   결과추이: "localStorage.setItem('vgb_log',JSON.stringify([3,5,6].map((s,i)=>({g:'stroop',t:Date.now()-(3-i)*864e5,s,m:10}))));" +
     "showResult({score:8,max:10,gameKey:'stroop',detailHtml:'',retryFn:()=>{}});document.querySelector('.trend-table').open=true",
+  기록오류: "document.getElementById('backup-msg').textContent='⚠ 베리굿브레인 기록 파일이 아니에요.';document.getElementById('backup-msg').className='backup-msg err'",
   모양: 'Shape.start()', 칠판: 'Chalk.start()', 같은그림: 'Speed.start()', 색깔글자: 'Stroop.start()', 카드: 'Memory.start()',
   청기백기: 'Flag.start()', 불빛: 'Pixel.start()', 낱말: 'Sort.start();Sort.flip()', 퀴즈: 'Quiz.start()',
 };

@@ -19,6 +19,7 @@
   --line: #dbe3f0;
   --good: #16a34a;
   --bad: #dc2626;
+  --bad-text: #b91c1c;   /* 작은 글씨로 쓰는 빨강 (--bad 는 버튼 바탕에도 쓰여 따로 둔다) */
   --overlay: rgba(255, 255, 255, .95);
   --brand: #1d4ed8;   /* 앱 이름 */
   --num: #b45309;     /* 연속·누적 숫자 */
@@ -37,6 +38,7 @@
     --brand: #60a5fa;   /* 어두운 배경 위 7.02:1 */
     --num: #f59e0b;     /* 6.81:1 */
     --trend: #3b82f6;   /* #2563eb 는 어두운 카드 위 2.83:1 로 모자랐다 */
+    --bad-text: #f87171;
     --ink-red: #dc2626; --ink-blue: #3b82f6; --ink-purple: #d8b4fe; --ink-green: #4ade80;
   }
 }
@@ -50,6 +52,7 @@
   --brand: #60a5fa;
   --num: #f59e0b;
   --trend: #3b82f6;
+  --bad-text: #f87171;
   --ink-red: #dc2626; --ink-blue: #3b82f6; --ink-purple: #d8b4fe; --ink-green: #4ade80;
 }
 
@@ -127,6 +130,18 @@ body {
 .mission-name { font-size: 1.3rem; font-weight: bold; margin-bottom: 4px; }
 .mission-desc { font-size: 1rem; color: var(--text-sub); }
 .footnote { margin-top: 24px; font-size: .85rem; color: var(--text-sub); text-align: center; }
+.backup-card {
+  background: var(--card); border: 2px solid var(--line); border-radius: 16px;
+  padding: 16px; margin: 0 0 24px;
+}
+.backup-card h3 { font-size: 1.1rem; margin-bottom: 6px; }
+.backup-card p { font-size: .95rem; color: var(--text-sub); line-height: 1.55; word-break: keep-all; }
+.backup-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.backup-buttons .btn-secondary { flex: 1 1 8em; padding: 12px 8px; font-size: 1rem; }
+.backup-msg { margin-top: 10px; font-weight: 700; word-break: keep-all; }
+.backup-msg:empty { display: none; }
+.backup-msg.ok { color: var(--text); }
+.backup-msg.err { color: var(--bad-text); }
 
 /* ---------- 게임 공용 ---------- */
 .game-header {
@@ -556,7 +571,16 @@ body {
 
   <div id="home-attend" class="attend-card"></div>
 
-  <p class="footnote">※ 프로토타입: 점수는 이 기기에만 저장됩니다</p>
+  <div class="backup-card">
+    <h3>💾 내 기록 옮기기</h3>
+    <p>기록은 이 휴대폰에만 저장돼요. 휴대폰을 바꾸거나 인터넷 기록을 지우기 전에 파일로 저장해 두세요.</p>
+    <div class="backup-buttons">
+      <button class="btn-secondary" onclick="Backup.save()">📤 파일로 저장</button>
+      <button class="btn-secondary" onclick="document.getElementById('backup-file').click()">📥 파일 불러오기</button>
+    </div>
+    <input type="file" id="backup-file" accept=".json,application/json" class="hidden" onchange="Backup.load(this)">
+    <div id="backup-msg" class="backup-msg" role="status" aria-live="polite"></div>
+  </div>
 </section>
 
 <!-- ===== 뇌 영역 소개 페이지 (공용) ===== -->
@@ -590,7 +614,7 @@ body {
   <p class="game-guide">위의 모양을 <b>빙글 돌리면</b> 아래 중 어떤 것이 될까요?</p>
   <div id="shape-target" class="shape-target"></div>
   <div id="shape-choices" class="shape-choices"></div>
-  <div id="shape-feedback" class="inline-feedback"></div>
+  <div id="shape-feedback" class="inline-feedback" role="status" aria-live="polite"></div>
 </section>
 
 <!-- ===== 두정엽: 칠판 비교 ===== -->
@@ -616,7 +640,7 @@ body {
     <button class="btn-big btn-chalk btn-chalk-eq" data-pick="=" onclick="Chalk.answer('=')"><span class="arr" aria-hidden="true">=</span>같아요</button>
     <button class="btn-big btn-chalk" data-pick="R" onclick="Chalk.answer('R')"><span class="arr" aria-hidden="true">▶</span>오른쪽</button>
   </div>
-  <div id="chalk-feedback" class="inline-feedback"></div>
+  <div id="chalk-feedback" class="inline-feedback" role="status" aria-live="polite"></div>
 </section>
 
 <!-- ===== 측두엽: 같은 그림 판별 ===== -->
@@ -638,7 +662,7 @@ body {
     <button id="speed-diff" class="btn-big btn-diff" onclick="Speed.answer(false)">다르다 ❌</button>
   </div>
   <button id="speed-begin" class="btn-primary" onclick="Speed.begin()">기억했어요, 시작!</button>
-  <div id="speed-feedback" class="inline-feedback"></div>
+  <div id="speed-feedback" class="inline-feedback" role="status" aria-live="polite"></div>
 </section>
 
 <!-- ===== 좌측 전두엽: 색깔 글자 ===== -->
@@ -655,7 +679,7 @@ body {
     <button class="btn-big btn-same" onclick="Stroop.answer(true)">같다 ⭕</button>
     <button class="btn-big btn-diff" onclick="Stroop.answer(false)">다르다 ❌</button>
   </div>
-  <div id="stroop-feedback" class="inline-feedback"></div>
+  <div id="stroop-feedback" class="inline-feedback" role="status" aria-live="polite"></div>
 </section>
 
 <!-- ===== 카드 뒤집기 ===== -->
@@ -721,7 +745,7 @@ body {
     </div>
   </div>
 
-  <div id="flag-feedback" class="flag-feedback hidden">
+  <div id="flag-feedback" class="flag-feedback hidden" role="status" aria-live="polite">
     <div id="flag-feedback-mark" class="feedback-mark">⭕</div>
     <div id="flag-feedback-text" class="feedback-text">정답!</div>
     <div id="flag-feedback-answer" class="feedback-answer"></div>
@@ -738,7 +762,7 @@ body {
   <div id="pixel-level-banner" class="level-banner">3칸</div>
   <p class="game-guide" id="pixel-guide">불이 켜진 칸을 잘 보세요!</p>
   <div id="pixel-grid" class="pixel-grid"></div>
-  <div id="pixel-feedback" class="inline-feedback"></div>
+  <div id="pixel-feedback" class="inline-feedback" role="status" aria-live="polite"></div>
 </section>
 
 <!-- ===== 낱말 나누기 ===== -->
@@ -762,7 +786,7 @@ body {
     <div class="sort-left">남은 카드 <b id="sort-left">16</b>장</div>
   </div>
 
-  <div id="sort-feedback" class="inline-feedback"></div>
+  <div id="sort-feedback" class="inline-feedback" role="status" aria-live="polite"></div>
   <div id="sort-bins" class="sort-bins"></div>
 </section>
 
@@ -776,7 +800,7 @@ body {
   <div id="quiz-passage" class="quiz-passage"></div>
   <div id="quiz-question" class="quiz-question"></div>
   <div id="quiz-choices" class="quiz-choices"></div>
-  <div id="quiz-feedback" class="quiz-feedback hidden"></div>
+  <div id="quiz-feedback" class="quiz-feedback hidden" role="status" aria-live="polite"></div>
   <button id="quiz-next" class="btn-primary hidden" onclick="Quiz.next()">다음 문제 →</button>
 </section>
 
@@ -784,7 +808,7 @@ body {
 <section id="screen-result" class="screen">
   <div class="result-box">
     <div class="result-emoji" id="result-emoji">🎉</div>
-    <h2 id="result-title">참 잘하셨어요!</h2>
+    <h2 id="result-title" tabindex="-1">참 잘하셨어요!</h2>
     <div id="result-best" class="result-best hidden">🏆 최고 기록 갱신!</div>
     <div class="result-score">획득 점수 <strong id="result-score">0점</strong> <span id="result-max" class="result-max"></span></div>
     <div id="result-trend" class="result-trend hidden"></div>
@@ -914,6 +938,63 @@ function renderBests() {
     el.textContent = b === null ? '-' : b + '점';
   });
 }
+
+// 기록 옮기기: vgb_ 로 시작하는 저장값을 파일 하나로 저장·불러오기
+const Backup = (() => {
+  const APP = 'verygoodbrain', MAX = 1024 * 1024;
+  const keys = () => { try { return Object.keys(localStorage).filter(k => k.startsWith('vgb_')); } catch { return []; } };
+  const msg = (t, ok) => { const el = document.getElementById('backup-msg'); el.textContent = t; el.className = 'backup-msg ' + (ok ? 'ok' : 'err'); };
+
+  function save() {
+    const data = {};
+    keys().forEach(k => (data[k] = localStorage.getItem(k)));
+    const d = new Date(), ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const blob = new Blob([JSON.stringify({ app: APP, v: 1, at: d.toISOString(), data })], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    // 한글 파일 이름은 일부 브라우저가 'download' 로 바꿔 버려 영문으로 둔다
+    a.download = `verygoodbrain-backup-${ymd}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    msg('📤 기록 파일을 저장했어요. 다운로드(내 파일) 폴더를 확인해 보세요.', true);
+  }
+
+  // 검사를 통과한 값만 돌려준다. 문제가 있으면 사람이 읽을 이유를 던진다
+  function parse(text) {
+    if (text.length > MAX) throw new Error('파일이 너무 커요.');
+    let o; try { o = JSON.parse(text); } catch { throw new Error('베리굿브레인 기록 파일이 아니에요.'); }
+    if (!o || o.app !== APP || !o.data || typeof o.data !== 'object' || Array.isArray(o.data)) throw new Error('베리굿브레인 기록 파일이 아니에요.');
+    const out = {};
+    for (const [k, v] of Object.entries(o.data)) {
+      if (!/^vgb_[a-z0-9_]{1,40}$/.test(k) || typeof v !== 'string') throw new Error('기록 파일 내용이 올바르지 않아요.');
+      out[k] = v;
+    }
+    return out;
+  }
+
+  function load(input) {
+    const f = input.files && input.files[0];
+    input.value = '';   // 같은 파일을 다시 골라도 동작하도록
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      let data;
+      try { data = parse(String(r.result)); } catch (e) { msg('⚠ ' + e.message, false); return; }
+      if (!confirm('불러오면 지금 이 휴대폰의 기록이 파일의 기록으로 바뀌어요. 계속할까요?')) return;
+      try {
+        keys().forEach(k => localStorage.removeItem(k));
+        Object.entries(data).forEach(([k, v]) => localStorage.setItem(k, v));
+      } catch { msg('⚠ 저장 공간에 쓸 수 없어요.', false); return; }
+      goHome();   // 점수·출석·대시보드를 새 기록으로 다시 그린다
+      document.querySelector('.backup-card').scrollIntoView({ block: 'center' });   // goHome 은 맨 위로 올린다
+      msg(`📥 기록을 불러왔어요! (게임 기록 ${Log.all().length}판)`, true);
+    };
+    r.onerror = () => msg('⚠ 파일을 읽지 못했어요.', false);
+    r.readAsText(f);
+  }
+
+  return { save, load, parse };
+})();
 
 // 효과음. 소리 파일을 쓰면 단일 HTML 파일이 깨지므로 브라우저에서 직접 만든다.
 const Sound = (() => {
@@ -1095,6 +1176,40 @@ function gameTimeout(sid, fn, ms) {
   return setTimeout(() => { if (sid === sessionId) fn(); }, ms);
 }
 
+// 제한시간 막대 + 남은 초. 같은 그림·칠판 비교·청기백기가 함께 쓴다
+// lowMs 이하로 남으면 막대와 숫자를 빨갛게 바꾼다
+function TimerBar(barId, numId, lowMs) {
+  let tick = null;
+  const els = () => [document.getElementById(barId), document.getElementById(numId)];
+  // 멈추고 가득 찬 막대로 되돌린다. ms 를 주면 숫자도 그 시간으로
+  function reset(ms) {
+    clearInterval(tick);
+    const [bar, num] = els();
+    bar.classList.remove('running', 'low'); num.classList.remove('low');
+    bar.style.transitionDuration = '0ms'; bar.style.width = '100%';
+    if (ms) num.textContent = Math.round(ms / 1000) + '초';
+  }
+  function run(ms) {
+    reset(ms);
+    const [bar, num] = els();
+    // 100% -> 0%를 한 프레임에 같이 넣으면 전환이 일어나지 않는다.
+    // 강제로 한 번 계산시켜야 막대가 실제로 줄어든다.
+    void bar.offsetWidth;
+    bar.classList.add('running');
+    bar.style.transitionDuration = ms + 'ms'; bar.style.width = '0%';
+    const endAt = Date.now() + ms;
+    tick = setInterval(() => {
+      const left = Math.max(0, endAt - Date.now());
+      num.textContent = Math.ceil(left / 1000) + '초';
+      if (left <= lowMs) { num.classList.add('low'); bar.classList.add('low'); }
+      if (!left) clearInterval(tick);
+    }, 100);
+  }
+  // 숫자만 멈춘다 (막대는 그 자리에서 끝까지 흘러가게 둔다)
+  const halt = () => clearInterval(tick);
+  return { run, reset, halt };
+}
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -1136,6 +1251,8 @@ function showResult({ score, max, detailHtml, retryFn, gameKey }) {
   Attend.mark();
   Sound.finish(ratio);
   showScreen('screen-result');
+  // 화면 읽기 도구가 결과를 처음부터 읽도록 제목으로 초점을 옮긴다 (화면은 움직이지 않게)
+  document.getElementById('result-title').focus({ preventScroll: true });
 }
 
 renderPoints();
@@ -1798,7 +1915,8 @@ const Chalk = (() => {
   };
 
   let no = 0, score = 0, streak = 0, lock = false, sid = 0, q = null;
-  let limitTimer = null, tickTimer = null;
+  let limitTimer = null;
+  const bar = TimerBar('chalk-timer', 'chalk-timer-num', 2000);
   const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));   // a 이상 b 이하
   const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 
@@ -1890,28 +2008,10 @@ const Chalk = (() => {
   }
 
   function startTimer() {
-    const bar = document.getElementById('chalk-timer'), num = document.getElementById('chalk-timer-num');
-    bar.classList.remove('running', 'low'); num.classList.remove('low');
-    bar.style.transitionDuration = '0ms'; bar.style.width = '100%';
-    num.textContent = LIMIT / 1000 + '초';
-    void bar.offsetWidth;   // 강제로 한 번 계산시켜야 막대가 실제로 줄어든다
-    bar.classList.add('running');
-    bar.style.transitionDuration = LIMIT + 'ms'; bar.style.width = '0%';
-    const endAt = Date.now() + LIMIT;
-    clearInterval(tickTimer);
-    tickTimer = setInterval(() => {
-      const left = Math.max(0, endAt - Date.now());
-      num.textContent = Math.ceil(left / 1000) + '초';
-      if (left <= 2000) { num.classList.add('low'); bar.classList.add('low'); }
-    }, 100);
+    bar.run(LIMIT);
     limitTimer = gameTimeout(sid, () => judge(null), LIMIT);
   }
-
-  function stopTimer() {
-    clearTimeout(limitTimer); clearInterval(tickTimer);
-    const bar = document.getElementById('chalk-timer');
-    bar.classList.remove('running'); bar.style.transitionDuration = '0ms'; bar.style.width = '100%';
-  }
+  function stopTimer() { clearTimeout(limitTimer); bar.reset(); }
 
   const truth = () => (q.a > q.b ? 'L' : q.a < q.b ? 'R' : '=');
 
@@ -1970,7 +2070,8 @@ const Speed = (() => {
   const LIMIT = 4000; // 카드 한 장당 제한시간 (원형은 1초지만 시니어 대상이라 넉넉하게)
 
   let no = 0, score = 0, streak = 0, prev = null, current = null, lock = false, sid = 0;
-  let limitTimer = null, tickTimer = null;
+  let limitTimer = null;
+  const bar = TimerBar('speed-timer', 'speed-timer-num', 1500);
   const rand = arr => arr[Math.floor(Math.random() * arr.length)];
 
   function start() {
@@ -2001,38 +2102,11 @@ const Speed = (() => {
     nextCard();
   }
 
-  // 제한시간 바: 청기백기와 같은 방식
   function startTimer() {
-    const bar = document.getElementById('speed-timer');
-    const num = document.getElementById('speed-timer-num');
-    bar.classList.remove('running', 'low');
-    num.classList.remove('low');
-    bar.style.transitionDuration = '0ms';
-    bar.style.width = '100%';
-    num.textContent = Math.round(LIMIT / 1000) + '초';
-    // 100% -> 0%를 한 프레임에 같이 넣으면 전환이 일어나지 않는다.
-    // 강제로 한 번 계산시켜야 막대가 실제로 줄어든다.
-    void bar.offsetWidth;
-    bar.classList.add('running');
-    bar.style.transitionDuration = LIMIT + 'ms';
-    bar.style.width = '0%';
-    const endAt = Date.now() + LIMIT;
-    clearInterval(tickTimer);
-    tickTimer = setInterval(() => {
-      const left = Math.max(0, endAt - Date.now());
-      num.textContent = Math.ceil(left / 1000) + '초';
-      if (left <= 1500) { num.classList.add('low'); bar.classList.add('low'); }
-    }, 100);
+    bar.run(LIMIT);
     limitTimer = gameTimeout(sid, timeUp, LIMIT);
   }
-
-  function stopTimer() {
-    clearTimeout(limitTimer); clearInterval(tickTimer);
-    const bar = document.getElementById('speed-timer');
-    bar.classList.remove('running');
-    bar.style.transitionDuration = '0ms';
-    bar.style.width = '100%';
-  }
+  function stopTimer() { clearTimeout(limitTimer); bar.reset(); }
 
   function timeUp() {
     if (lock) return;
@@ -2273,7 +2347,8 @@ const Flag = (() => {
   let round = 0, score = 0, history = [];
   let state = { blue: 'neutral', white: 'neutral' };
   let target = null, command = '';
-  let timer = null, earlyTimer = null, tickTimer = null;
+  let timer = null, earlyTimer = null;
+  const bar = TimerBar('flag-timer', 'flag-timer-num', 3000);
   let readyTimer = null, endTimer = null, roundActive = false, sid = 0;
 
   const rand = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -2338,7 +2413,7 @@ const Flag = (() => {
   }
 
   function quit() {
-    clearTimeout(timer); clearTimeout(earlyTimer); clearInterval(tickTimer);
+    clearTimeout(timer); clearTimeout(earlyTimer); bar.halt();
     clearTimeout(readyTimer); clearTimeout(endTimer);
     roundActive = false;
     document.getElementById('flag-feedback').classList.add('hidden');
@@ -2361,33 +2436,14 @@ const Flag = (() => {
     document.getElementById('flag-command').textContent = '준비...';
     document.getElementById('flag-feedback').classList.add('hidden');
 
-    // 타이머 바 초기화
-    const bar = document.getElementById('flag-timer');
-    const num = document.getElementById('flag-timer-num');
-    bar.classList.remove('running', 'low');
-    num.classList.remove('low');
-    bar.style.width = '100%';
-    num.textContent = Math.round(LEVEL_TIME[level] / 1000) + '초';
+    bar.reset(LEVEL_TIME[level]);
 
     // 잠깐 "준비..." 후 지시 표시
     readyTimer = gameTimeout(sid, () => {
       document.getElementById('flag-command').innerHTML = commandHtml(command);
       roundActive = true;
       const ms = LEVEL_TIME[level];
-      requestAnimationFrame(() => {
-        bar.classList.add('running');
-        bar.style.transitionDuration = ms + 'ms';
-        bar.style.width = '0%';
-      });
-      // 남은 시간 숫자 표시 (3초 이하는 빨간색)
-      const endAt = Date.now() + ms;
-      clearInterval(tickTimer);
-      tickTimer = setInterval(() => {
-        if (!roundActive) { clearInterval(tickTimer); return; }
-        const left = Math.max(0, endAt - Date.now());
-        num.textContent = Math.ceil(left / 1000) + '초';
-        if (left <= 3000) { num.classList.add('low'); bar.classList.add('low'); }
-      }, 200);
+      bar.run(ms);   // 3초 이하는 빨간색
       timer = gameTimeout(sid, evaluate, ms);
     }, 800);
   }
@@ -2430,7 +2486,7 @@ const Flag = (() => {
 
   function evaluate() {
     roundActive = false;
-    clearTimeout(timer); clearTimeout(earlyTimer); clearInterval(tickTimer);
+    clearTimeout(timer); clearTimeout(earlyTimer); bar.halt();
 
     const ok = state.blue === target.blue && state.white === target.white;
     if (ok) { score++; Sound.correct(); }
