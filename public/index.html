@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>베리굿브레인 뇌 훈련</title>
 <style>
 /* 베리굿브레인 프로토타입 - 시니어 친화 스타일 */
@@ -39,7 +39,11 @@
   --overlay: rgba(15, 23, 42, .95);
 }
 
-html { font-size: 18px; overscroll-behavior-y: contain; /* 당겨서 새로고침 방지 */ }
+html {
+  /* %로 줘야 사용자가 휴대폰에서 키워둔 글자 크기를 따른다. 기본(16px)이면 18px */
+  font-size: 112.5%;
+  overscroll-behavior-y: contain; /* 당겨서 새로고침 방지 */
+}
 body {
   font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
   background: var(--bg);
@@ -85,12 +89,12 @@ body {
 .attend-title { font-size: 1.15rem; font-weight: bold; }
 .attend-streak { font-size: .95rem; color: var(--text-sub); white-space: nowrap; }
 .attend-streak b { color: #b45309; font-size: 1.25rem; }
-.attend-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.attend-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
 .attend-dow { text-align: center; font-size: .75rem; color: var(--text-sub); }
 .attend-day {
   aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
   border-radius: 10px; background: var(--bg); border: 2px solid var(--line);
-  font-size: 1rem; color: var(--text-sub);
+  font-size: min(1rem, 7vw); color: var(--text-sub); min-width: 0; overflow: hidden;
 }
 .attend-day.done { background: #fef3c7; border-color: #f59e0b; }
 .attend-day.today { border-color: var(--blue); border-width: 3px; font-weight: bold; }
@@ -119,8 +123,19 @@ body {
   background: none; border: none; font-size: 1.05rem; color: var(--text-sub);
   cursor: pointer; padding: 8px;
 }
-.game-title { font-size: 1.2rem; font-weight: bold; }
-.game-stat { font-size: 1.1rem; font-weight: bold; color: var(--blue); min-width: 60px; text-align: right; }
+.game-title {
+  font-size: 1.2rem; font-weight: bold; flex: 1; min-width: 0; text-align: center;
+  word-break: keep-all; overflow-wrap: break-word;
+}
+/* 글씨를 크게 키워 한 줄에 '나가기 · 제목 · 점수'가 다 안 들어가면
+   나가기와 점수를 윗줄에, 제목을 아랫줄 가운데에 둔다.
+   미디어쿼리의 em 은 사용자가 정한 기본 글자 크기를 따르므로
+   기본(16px)인 360px 휴대폰에서는 걸리지 않는다 */
+@media (max-width: 19em) {
+  .game-header { flex-wrap: wrap; row-gap: 2px; }
+  .game-title { order: 3; flex-basis: 100%; }
+}
+.game-stat { font-size: 1.1rem; font-weight: bold; color: var(--blue); min-width: 3.3em; text-align: right; white-space: nowrap; flex: none; }
 .game-guide { text-align: center; color: var(--text-sub); margin-bottom: 14px; font-size: 1.05rem; }
 .game-substat { text-align: center; color: var(--text-sub); margin-top: 14px; }
 
@@ -152,7 +167,7 @@ body {
 .mcard-face {
   position: absolute; inset: 0; border-radius: 14px;
   display: flex; align-items: center; justify-content: center;
-  backface-visibility: hidden; font-size: 3rem;
+  backface-visibility: hidden; font-size: min(3rem, 22vw);
 }
 .mcard-back {
   background: linear-gradient(135deg, #3b82f6, #1d4ed8);
@@ -191,15 +206,15 @@ body {
 }
 .sort-left { margin-top: 10px; font-size: .95rem; color: var(--text-sub); }
 .sort-left b { color: var(--text); font-size: 1.1rem; }
-.sort-bins { display: flex; gap: 8px; margin-top: 4px; }
+.sort-bins { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .sort-bin {
-  flex: 1; background: var(--card); border: 2px solid var(--line);
+  flex: 1 1 4rem; min-width: 0; background: var(--card); border: 2px solid var(--line);
   border-radius: 14px; padding: 10px 2px; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
 }
 .sort-bin:disabled { opacity: .45; }
 .sort-bin-emoji { font-size: 1.7rem; line-height: 1; }
-.sort-bin-label { font-size: .95rem; font-weight: bold; color: var(--text); }
+.sort-bin-label { font-size: .95rem; font-weight: bold; color: var(--text); overflow-wrap: anywhere; text-align: center; }
 .sort-bin-count { font-size: .8rem; color: var(--text-sub); }
 .sort-bin.pop { border-color: var(--good); animation: sort-pop .35s ease; }
 .sort-bin.nope { border-color: var(--bad); }
